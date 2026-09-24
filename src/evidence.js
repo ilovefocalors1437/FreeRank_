@@ -57,6 +57,7 @@ const CATEGORY_SKILL = {
   "3d_props": "prop_art",
   copywriting: "copywriting",
   ui_design: "ui_design",
+  brand_design: "brand_design",
 };
 
 const REVIEW_TERMS = [
@@ -68,8 +69,8 @@ const REVIEW_TERMS = [
 ];
 
 // Within one freelancer: projects whose images or descriptions are near-identical
-// collapse into one cluster (union-find). Thresholds come from the measured corpus:
-// true copies sit at dHash <= 2 / SimHash <= 6, unrelated work at >= 7 / >= 17.
+// collapse into one cluster (union-find). Same measured thresholds as fraud.js:
+// structure hash <= 19 of 256 bits (re-uploads sit at <= 6), SimHash <= 10 of 64.
 export function selfClusters(projects) {
   const parent = projects.map((_, i) => i);
   const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
@@ -77,7 +78,7 @@ export function selfClusters(projects) {
     for (let j = i + 1; j < projects.length; j++) {
       const a = projects[i];
       const b = projects[j];
-      const img = hamming(a.images[0].dhashNorm, b.images[0].dhashNorm) <= 4;
+      const img = hamming(a.images[0].fp.dhash256, b.images[0].fp.dhash256) <= 19;
       const txt = hamming(a.descHash, b.descHash) <= 10;
       if (img || txt) parent[find(i)] = find(j);
     }

@@ -7,6 +7,8 @@ import { tokens } from "./embed.js";
 import { buildRecords, RAW_CORPUS } from "./data.js";
 import { buildEvidence } from "./evidence.js";
 import { scanImageDuplicates, scanTextCopies, assessFreelancer, reviewCase } from "./fraud.js";
+import { estimateGrade } from "./grader.js";
+import { buildLadder } from "./rank.js";
 
 function buildBM25(projects) {
   const docs = new Map();
@@ -66,6 +68,12 @@ export function buildIndex(raw = RAW_CORPUS) {
     f.outcome = outcomeQuality(f);
     f.isNewcomer = f.workHistory.length === 0 && f.reviews.length === 0;
   }
+
+  // System score inputs: a grade per project (the cached estimate; POST
+  // /api/portfolio/check runs the LLM grader on new uploads when configured).
+  for (const p of projects) p.grade = p.grade || estimateGrade(p);
+  const ladder = buildLadder(freelancers);
+  for (const f of freelancers) f.ladder = ladder.get(f.id);
 
   const live = projects.filter((p) => p.status !== "held");
   return {

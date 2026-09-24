@@ -1,8 +1,11 @@
 // src/fraud.js — portfolio authenticity (design §8). Every signal is a feature with a
 // versioned weight; the tier decides visibility, and only a human decides a takedown.
 //
-// Layer 1  dHash fingerprints, LSH-banded (8 bands x 8 bits: any pair within Hamming
-//          7 is guaranteed to share a band), confirmed by exact Hamming distance.
+// Layer 1  256-bit structure hash (dHash on 64x64 luma, src/embed.js), LSH-banded
+//          (32 bands x 8 bits: any pair within Hamming 31 is guaranteed to share a
+//          band), confirmed by exact Hamming distance. Threshold measured on the real
+//          renders (assets-src/measure-fp.mjs): recoloured thefts 17-18, closest honest
+//          cross-account pair 21. The margin is narrow; the review queue absorbs it.
 // Layer 1b colour signature on confirmed pairs: same structure + different hue
 //          histogram = a recolour, i.e. deliberate laundering.
 // Layer 3  own upload index across ALL accounts; earliest consistent uploader is the
@@ -14,20 +17,20 @@
 
 import { hamming, cosine } from "./embed.js";
 
-export const THRESH = { dhash: 4, simhash: 10, recolor: 0.9 };
+export const THRESH = { dhash: 19, simhash: 10, recolor: 0.9 };
 export const TIERS = [
   { name: "pass", max: 0.25, trust: 1.0 },
   { name: "soft_flag", max: 0.6, trust: 0.3 },
   { name: "hard_hold", max: 1.01, trust: 0 },
 ];
 
-const BANDS = 8;
+const BANDS = 32;
 const bandKeys = (h) => Array.from({ length: BANDS }, (_, i) => `${i}:${(h >> BigInt(i * 8)) & 0xffn}`);
 
 export function scanImageDuplicates(images, provenance) {
   const buckets = new Map();
   for (const im of images) {
-    for (const k of bandKeys(im.dhashNorm)) {
+    for (const k of bandKeys(im.fp.dhash256)) {
       if (!buckets.has(k)) buckets.set(k, []);
       buckets.get(k).push(im);
     }
@@ -43,7 +46,7 @@ export function scanImageDuplicates(images, provenance) {
         const key = a.id < b.id ? `${a.id}|${b.id}` : `${b.id}|${a.id}`;
         if (tried.has(key)) continue;
         tried.add(key);
-        const dist = hamming(a.dhashNorm, b.dhashNorm);
+        const dist = hamming(a.fp.dhash256, b.fp.dhash256);
         if (dist > THRESH.dhash) continue;
         const colorSim = cosine(a.color, b.color);
         const [orig, copy] = whoIsOriginal(a, b, provenance);
@@ -54,7 +57,8 @@ export function scanImageDuplicates(images, provenance) {
           copyFreelancer: copy.freelancerId,
           originalProject: orig.projectId,
           copyProject: copy.projectId,
-          method: "dhash_lsh",
+          method: "dhash256_lsh",
+          edgeDistance: hamming(a.fp.edge256, b.fp.edge256),
           hamming: dist,
           colorSim: +colorSim.toFixed(3),
           kind: colorSim < THRESH.recolor ? "recolored_copy" : "exact_or_recompressed",

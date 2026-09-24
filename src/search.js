@@ -8,6 +8,8 @@ import { cosine, gridVector, colorSignature, textVector, tokens, isGrid } from "
 import { styleOverlap, STYLE_KEYS } from "./data-lib.js";
 import { saturate } from "./evidence.js";
 import { understand, validateSpec, degradedSpec, RELATED } from "./spec.js";
+import { rankNorm } from "./rank.js";
+import { mulberry32 } from "./data-lib.js";
 
 const RRF_K = 60;
 const CHANNEL_K = 50;
@@ -88,7 +90,12 @@ function weightsFor(spec, hasImage) {
   if (spec.work_type?.category == null && !(spec.skills || []).length) {
     // Nothing structured to match on (unknown work type, degraded mode): text relevance has to carry it.
     w = { visual: 0, text: 0.55, worktype: 0, skills: 0, tech: 0.1, difficulty: 0.05, outcome: 0.3 };
-  } else if (!visualJob) w = { visual: 0, text: 0.1, worktype: 0.2, skills: 0.4, tech: 0.1, difficulty: 0.05, outcome: 0.15 };
+  } else if (!visualJob) {
+    // No pictures to compare, so what the portfolio is *about* does the visual
+    // channel's job. Measured: at text 0.1 a quest-dialogue writer lost a
+    // quest-dialogue query to a marketing writer with a longer contract record.
+    w = { visual: 0, text: 0.35, worktype: 0.15, skills: 0.25, tech: 0.05, difficulty: 0.05, outcome: 0.15 };
+  }
   else if (hasImage) w = { visual: 0.4, text: 0.05, worktype: 0.1, skills: 0.25, tech: 0.1, difficulty: 0.05, outcome: 0.05 };
   else w = { visual: 0.15, text: 0.1, worktype: 0.15, skills: 0.3, tech: 0.15, difficulty: 0.05, outcome: 0.1 };
   if ((spec.technical_requirements || []).length >= 2 && w.visual > 0) {
@@ -98,10 +105,35 @@ function weightsFor(spec, hasImage) {
   return w;
 }
 
+// ---------------------------------------------------------------- arenas
+//
+// casual       everyone whose work genuinely matches (the relevance gate) gets an
+//              equal chance: the gated list is shuffled per rotation window, so over
+//              time each qualified freelancer is shown in each position equally often.
+// competitive  only ranked freelancers (3+ casual clients, clean portfolio, active);
+//              relevance x rank, so the higher your rank the higher you land. Thieves
+//              cannot reach here: rank needs real client reviews.
+// open         the engine's own view (MMR + exploration slot) for the dev console.
+
+const RANK_BOOST = 0.45;
+const ROTATION_MS = 60 * 60 * 1000;
+const strHash = (s) => [...s].reduce((a, c) => (Math.imul(a, 31) + c.charCodeAt(0)) >>> 0, 2166136261);
+
+function fairShuffle(list, seed) {
+  const rnd = mulberry32(seed);
+  const a = [...list];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 // ---------------------------------------------------------------- main entry
 
 export function search(index, req = {}) {
   const t0 = performance.now();
+  const arena = ["casual", "competitive"].includes(req.mode) ? req.mode : "open";
   const k = Math.max(1, Math.min(20, req.k ?? 8));
   const image = req.image && isGrid(req.image) ? req.image : null;
   const notes = [];
@@ -150,8 +182,13 @@ export function search(index, req = {}) {
   const hf = spec.hard_filters || {};
   const excluded = [];
   const eligible = new Set();
+  let outsideArena = 0;
   for (const f of index.freelancers) {
     if (f.trust.tier === "hard_hold") continue;
+    if (arena === "competitive" && !(f.ladder?.competitive && f.ladder.eligibility.active)) {
+      outsideArena++;
+      continue;
+    }
     if (hf.accepting_work && !f.availability) excluded.push({ id: f.id, reason: "not accepting work" });
     else if (hf.categories && !hf.categories.includes(f.category)) continue;
     else eligible.add(f.id);
@@ -285,8 +322,8 @@ export function search(index, req = {}) {
       score: r3(c.score),
       why: c.score < SCORE_FLOOR ? "score below floor" : crossCategory(c) ? "different work type, no evidence for the requested skills" : "no query-specific evidence (only generic signals like contract record)",
     }));
-  const page = [];
-  const rest = shortlist.slice(0, 30);
+  let page = [];
+  const rest = arena === "open" ? shortlist.slice(0, 30) : [];
   const sim = (a, b) => styleOverlap(a.best?.p.style, b.best?.p.style) * (a.f.category === b.f.category ? 1 : 0.5);
   while (rest.length && page.length < k) {
     let bi = 0;
@@ -314,7 +351,16 @@ export function search(index, req = {}) {
     }
   }
 
-  const results = page.map((c, i) => formatResult(c, i + 1, spec, useImage, terms));
+  let rotation = null;
+  if (arena === "competitive") {
+    for (const c of shortlist) c.arenaScore = c.score * (1 - RANK_BOOST + RANK_BOOST * rankNorm(c.f.ladder.rating));
+    page = [...shortlist].sort((a, b) => b.arenaScore - a.arenaScore).slice(0, k).map((c) => ({ ...c, slot: "ranked" }));
+  } else if (arena === "casual") {
+    rotation = req.rotation ?? Math.floor(Date.now() / ROTATION_MS);
+    page = fairShuffle(shortlist, strHash(`${rotation}|${qTerms.join(" ")}|${spec.work_type?.category}`)).slice(0, k).map((c) => ({ ...c, slot: "rotation" }));
+  }
+
+  const results = page.map((c, i) => formatResult(c, i + 1, spec, useImage, terms, arena));
 
   // Held accounts that recall would otherwise have surfaced — visible here for the demo;
   // in production this list is admin-only.
@@ -326,6 +372,10 @@ export function search(index, req = {}) {
   }
 
   const out = {
+    arena,
+    rotation,
+    matched: shortlist.length,
+    outside_arena: outsideArena,
     mode,
     spec,
     spec_errors: specErrors,
@@ -345,7 +395,7 @@ export function search(index, req = {}) {
 
 // ---------------------------------------------------------------- explanations
 
-function formatResult(c, rank, spec, useImage, terms) {
+function formatResult(c, rank, spec, useImage, terms, arena) {
   const { f, features } = c;
   const reasons = [];
   const caveats = [];
@@ -402,10 +452,17 @@ function formatResult(c, rank, spec, useImage, terms) {
 
   const summary = reasons.length ? `Matched because ${reasons.slice(0, 2).map((r) => r.text.replace(/ \(.*$/, "")).join(" and ")}.` : "Weak match: recalled, but little evidence lines up with this request.";
 
+  const L = f.ladder;
+  const live = f.projects.filter((p) => p.status !== "held");
+  const ordered = c.best ? [c.best.p, ...live.filter((p) => p !== c.best.p)] : live;
   return {
     rank,
     slot: c.slot,
-    freelancer: { id: f.id, name: f.name, headline: f.headline, category: f.category, newcomer: f.isNewcomer },
+    arena_score: c.arenaScore != null ? r3(c.arenaScore) : null,
+    freelancer: { id: f.id, name: f.name, headline: f.headline, category: f.category, location: f.location, newcomer: f.isNewcomer },
+    ladder: L?.competitive ? { rating: L.rating, tier: L.rank.tier, division: L.rank.division, label: L.rank.label, masterSeat: L.rank.masterSeat ?? null } : null,
+    stats: { jobs: f.outcome.jobs, rehired: f.outcome.rehired, clients: new Set(f.workHistory.map((j) => j.client)).size },
+    portfolio: ordered.slice(0, 3).map((p) => ({ id: p.id, title: p.title, thumb: p.thumbUrl, image: p.imageUrl })),
     score: r3(c.score),
     trust: { tier: f.trust.tier, risk: f.trust.risk },
     features: Object.fromEntries(Object.entries(features).map(([k2, v]) => [k2, r3(v)])),
@@ -414,7 +471,7 @@ function formatResult(c, rank, spec, useImage, terms) {
     recalled_via: c.fused.via,
     rrf: r3(c.fused.rrf),
     why: { summary, reasons, caveats },
-    best_project: c.best ? { id: c.best.p.id, title: c.best.p.title, grid: c.best.p.images[0].grid } : null,
+    best_project: c.best ? { id: c.best.p.id, title: c.best.p.title, grid: c.best.p.images[0].grid, thumb: c.best.p.thumbUrl } : null,
     similar_projects: c.similar.map((x) => x.p.id),
     skill_evidence: c.skillDetail,
   };

@@ -90,6 +90,72 @@ export function hex64(b) {
   return b.toString(16).padStart(16, "0");
 }
 
+// ---- authenticity fingerprints (64x64 grayscale in, two 256-bit hashes out) -----
+// Measured on the real renders: an 8x8 dHash could not tell a recoloured theft
+// (distance 0-3) from two honest pieces that share a composition (also 0-1).
+// At 256 bits the structure hash separates them, and an edge hash — outlines
+// survive recolouring — confirms. Index time (finalize.py) and upload time (the
+// browser) both send the same canonical input: 64x64 luma (0.299 R + 0.587 G +
+// 0.114 B), so this is the only implementation of the hashes.
+
+export const FP_SIDE = 64;
+
+export function resizeArea(src, sw, sh, dw, dh) {
+  const out = new Float64Array(dw * dh);
+  const fx = sw / dw;
+  const fy = sh / dh;
+  for (let y = 0; y < dh; y++) {
+    const y0 = y * fy;
+    const y1 = y0 + fy;
+    for (let x = 0; x < dw; x++) {
+      const x0 = x * fx;
+      const x1 = x0 + fx;
+      let sum = 0;
+      let area = 0;
+      for (let sy = Math.floor(y0); sy < Math.ceil(y1); sy++) {
+        const wy = Math.min(y1, sy + 1) - Math.max(y0, sy);
+        for (let sx = Math.floor(x0); sx < Math.ceil(x1); sx++) {
+          const w = wy * (Math.min(x1, sx + 1) - Math.max(x0, sx));
+          sum += src[sy * sw + sx] * w;
+          area += w;
+        }
+      }
+      out[y * dw + x] = sum / area;
+    }
+  }
+  return out;
+}
+
+const toBig = (bits) => bits.reduce((acc, b) => (acc << 1n) | (b ? 1n : 0n), 0n);
+
+export function fingerprint(gray) {
+  const N = FP_SIDE;
+  // structure: horizontal gradient signs on a 17x16 grid -> 256 bits. Rounded to
+  // whole grey levels first: in smooth backdrops unrounded neighbours differ by
+  // hundredths, and a recolour flips those signs (measured: 55/256 bits vs 8).
+  const g = resizeArea(gray, N, N, 17, 16).map(Math.round);
+  const dbits = [];
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) dbits.push(g[y * 17 + x + 1] > g[y * 17 + x]);
+  // edges: |Laplacian| on 64x64, pooled to 16x16, split at the median -> 256 bits
+  const lap = new Float64Array(N * N);
+  for (let y = 1; y < N - 1; y++) {
+    for (let x = 1; x < N - 1; x++) {
+      let s = 8 * gray[y * N + x];
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (dx || dy) s -= gray[(y + dy) * N + x + dx];
+      lap[y * N + x] = Math.abs(s);
+    }
+  }
+  const e = resizeArea(lap, N, N, 16, 16);
+  const med = [...e].sort((a, b) => a - b)[128];
+  return { dhash256: toBig(dbits), edge256: toBig([...e].map((v) => v > med)) };
+}
+
+export function decodeGray(b64) {
+  const buf = Buffer.from(b64, "base64");
+  if (buf.length !== FP_SIDE * FP_SIDE) throw new Error(`gray fingerprint input must be ${FP_SIDE}x${FP_SIDE} bytes`);
+  return buf;
+}
+
 // ---- text ---------------------------------------------------------------------
 
 export function tokens(text) {
