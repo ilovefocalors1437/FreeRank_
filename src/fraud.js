@@ -17,7 +17,7 @@
 
 import { hamming, cosine } from "./embed.js";
 
-export const THRESH = { dhash: 19, simhash: 10, recolor: 0.9 };
+export const THRESH = { dhash: 19, identical: 4, simhash: 10, recolor: 0.9 };
 export const TIERS = [
   { name: "pass", max: 0.25, trust: 1.0 },
   { name: "soft_flag", max: 0.6, trust: 0.3 },
@@ -27,7 +27,9 @@ export const TIERS = [
 const BANDS = 32;
 const bandKeys = (h) => Array.from({ length: BANDS }, (_, i) => `${i}:${(h >> BigInt(i * 8)) & 0xffn}`);
 
-export function scanImageDuplicates(images, provenance) {
+// `cleared`: project ids a reviewer has approved as legitimately the uploader's
+// (an appeal won — e.g. the same asset sold on several marketplaces).
+export function scanImageDuplicates(images, provenance, cleared = new Set()) {
   const buckets = new Map();
   for (const im of images) {
     for (const k of bandKeys(im.fp.dhash256)) {
@@ -47,9 +49,11 @@ export function scanImageDuplicates(images, provenance) {
         if (tried.has(key)) continue;
         tried.add(key);
         const dist = hamming(a.fp.dhash256, b.fp.dhash256);
-        if (dist > THRESH.dhash) continue;
+        const stable = hamming(a.fp.stable256, b.fp.stable256);
+        if (dist > THRESH.dhash && stable > THRESH.identical) continue;
         const colorSim = cosine(a.color, b.color);
         const [orig, copy] = whoIsOriginal(a, b, provenance);
+        if (cleared.has(copy.projectId)) continue;
         edges.push({
           original: orig.id,
           copy: copy.id,
@@ -60,8 +64,9 @@ export function scanImageDuplicates(images, provenance) {
           method: "dhash256_lsh",
           edgeDistance: hamming(a.fp.edge256, b.fp.edge256),
           hamming: dist,
+          stableDistance: stable,
           colorSim: +colorSim.toFixed(3),
-          kind: colorSim < THRESH.recolor ? "recolored_copy" : "exact_or_recompressed",
+          kind: colorSim < THRESH.recolor ? "recolored_copy" : stable <= THRESH.identical ? "exact_or_recompressed" : "near_copy",
         });
       }
     }

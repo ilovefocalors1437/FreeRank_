@@ -71,20 +71,20 @@ export function buildRecords(raw = RAW_CORPUS) {
     const fr = { ...f, projects: [] };
     for (const p of f.projects) {
       const grid = p.img || gridFor(p.id);
-      const img = imageRecord(`${p.id}-img`, grid, { projectId: p.id, freelancerId: f.id, ts: f.ts });
+      const img = imageRecord(`${p.id}-img`, grid, { projectId: p.id, freelancerId: f.id, ts: p.ts ?? f.ts });
       images.push(img);
       const text = projectText(p);
       const proj = {
         ...p,
         freelancerId: f.id,
-        ts: f.ts,
+        ts: p.ts ?? f.ts,
         text,
         descHash: simhash(p.title + " " + p.description),
         textVec: textVector(text),
         facts: extractFacts(p),
         images: [img],
-        imageUrl: GRIDS[p.id] ? imageUrl(p.id) : null,
-        thumbUrl: GRIDS[p.id] ? imageUrl(p.id, "sm") : null,
+        imageUrl: p.imageUrl ?? (GRIDS[p.id] ? imageUrl(p.id) : null),
+        thumbUrl: p.thumbUrl ?? (GRIDS[p.id] ? imageUrl(p.id, "sm") : null),
         status: "visible", // fraud.js may set "held"
         trustWeight: 1,
       };

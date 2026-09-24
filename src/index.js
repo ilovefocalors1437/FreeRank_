@@ -42,7 +42,8 @@ export function buildIndex(raw = RAW_CORPUS) {
   const projectById = new Map(projects.map((p) => [p.id, p]));
 
   const provenance = new Map(freelancers.map((f) => [f.id, f.credentials.some((c) => c.verified && c.type === "source_files") ? 1 : 0]));
-  const { edges: imageEdges, candidatePairs } = scanImageDuplicates(images, provenance);
+  const cleared = new Set(projects.filter((p) => p.cleared).map((p) => p.id));
+  const { edges: imageEdges, candidatePairs } = scanImageDuplicates(images, provenance, cleared);
   const textEdges = scanTextCopies(projects);
 
   // A project whose image is a later cross-account copy never feeds search or evidence.

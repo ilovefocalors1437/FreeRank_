@@ -93,8 +93,9 @@ export function hex64(b) {
 // ---- authenticity fingerprints (64x64 grayscale in, two 256-bit hashes out) -----
 // Measured on the real renders: an 8x8 dHash could not tell a recoloured theft
 // (distance 0-3) from two honest pieces that share a composition (also 0-1).
-// At 256 bits the structure hash separates them, and an edge hash — outlines
-// survive recolouring — confirms. Index time (finalize.py) and upload time (the
+// At 256 bits the structure hash separates them. The edge hash is computed and
+// shown to reviewers, but decides nothing: measured on the recoloured thefts it
+// ranged 2-42 bits, too unstable to trust. Index time (finalize.py) and upload time (the
 // browser) both send the same canonical input: 64x64 luma (0.299 R + 0.587 G +
 // 0.114 B), so this is the only implementation of the hashes.
 
@@ -135,7 +136,17 @@ export function fingerprint(gray) {
   // hundredths, and a recolour flips those signs (measured: 55/256 bits vs 8).
   const g = resizeArea(gray, N, N, 17, 16).map(Math.round);
   const dbits = [];
-  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) dbits.push(g[y * 17 + x + 1] > g[y * 17 + x]);
+  const sbits = [];
+  for (let y = 0; y < 16; y++) {
+    for (let x = 0; x < 16; x++) {
+      const step = g[y * 17 + x + 1] - g[y * 17 + x];
+      dbits.push(step > 0);
+      // "stable" variant: flat areas stay 0 under re-compression noise (measured:
+      // an unchanged file re-uploaded as WebP moves 5-10 bits of the plain hash,
+      // 0-2 of this one). Used to tell "the same file" from "an altered copy".
+      sbits.push(step > 2);
+    }
+  }
   // edges: |Laplacian| on 64x64, pooled to 16x16, split at the median -> 256 bits
   const lap = new Float64Array(N * N);
   for (let y = 1; y < N - 1; y++) {
@@ -147,7 +158,7 @@ export function fingerprint(gray) {
   }
   const e = resizeArea(lap, N, N, 16, 16);
   const med = [...e].sort((a, b) => a - b)[128];
-  return { dhash256: toBig(dbits), edge256: toBig([...e].map((v) => v > med)) };
+  return { dhash256: toBig(dbits), stable256: toBig(sbits), edge256: toBig([...e].map((v) => v > med)) };
 }
 
 export function decodeGray(b64) {

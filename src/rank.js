@@ -29,7 +29,7 @@ export const DEMOTION_SHIELD = 25; // must fall this far below a boundary to dro
 export const MASTER_SEATS = 3; // per category in this demo corpus; production: top 100 or 0.5%
 
 export const ENTRY = { distinctClients: 3, minJobValue: 50, portfolioPieces: 3 };
-export const ACTIVE_DAYS = 90;
+export const ACTIVE_DAYS = 180; // no competitive job in half a year: out of Competitive search until the next one
 
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 
@@ -195,6 +195,7 @@ export function buildLadder(freelancers) {
       e.progress = e.rank.tier === "master" ? null : {
         toNextDivision: e.rank.division > 1 ? divisionFloor({ tier: t.id, division: e.rank.division - 1 }) - e.rating : next ? next.min - e.rating : null,
         nextLabel: e.rank.division > 1 ? `${t.name} ${e.rank.division - 1}` : next ? (next.id === "master" ? "Master" : `${next.name} ${DIVISIONS}`) : null,
+        span: tierWidth(t),
       };
     });
   }

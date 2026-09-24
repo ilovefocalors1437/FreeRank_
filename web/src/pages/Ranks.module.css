@@ -1,0 +1,55 @@
+.band { background: linear-gradient(180deg, var(--cobalt) 0%, var(--cobalt-night) 100%); color: var(--on-cobalt); padding: 64px 0 72px; }
+.band h1 { font-size: clamp(3.4rem, 8vw, 6rem); }
+.lede { margin-top: 16px; max-width: 56ch; font-size: 1.12rem; color: var(--on-cobalt-2); }
+.tiers { list-style: none; margin: 48px 0 0; padding: 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+.tiers li {
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 18px 12px 20px;
+  border-radius: var(--r-lg); background: oklch(1 0 0 / 0.05); border: 1px solid oklch(1 0 0 / 0.1);
+}
+.tiers h2 { font-size: 2rem; line-height: 1; }
+.range { color: var(--gold); font-weight: 600; font-size: 0.95rem; }
+.divs { display: flex; gap: 4px; }
+.divs span { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 6px; background: oklch(1 0 0 / 0.08); font-size: 0.8125rem; font-weight: 600; color: var(--on-cobalt-2); }
+.count { color: var(--on-cobalt-2); font-size: 0.875rem; }
+
+.how { padding-block: 88px 24px; }
+.how h2 { font-size: clamp(2.4rem, 5vw, 3.6rem); margin-bottom: 32px; }
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+.rules article { background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 22px; display: flex; flex-direction: column; gap: 10px; }
+.rules h3 { font-size: 1.15rem; }
+.rules p { color: var(--ink-2); font-size: 0.95rem; }
+.rules b { color: var(--ink); }
+.step { font-family: var(--display); font-weight: 800; font-size: 2.4rem; line-height: 0.9; color: var(--cobalt); }
+.formula { margin-top: 22px; font-size: 0.95rem; color: var(--ink-2); padding: 14px 18px; border-radius: var(--r); background: var(--cobalt-soft); display: inline-block; }
+.formula span { font-weight: 700; color: var(--ink); }
+
+.boards { padding-top: 72px; display: flex; flex-direction: column; gap: 22px; }
+.boardsHead { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.boardsHead h2 { font-size: clamp(2.4rem, 5vw, 3.6rem); }
+.tabs { display: flex; gap: 4px; padding: 4px; background: var(--paper); border: 1px solid var(--line); border-radius: 999px; flex-wrap: wrap; }
+.tabs button { border: 0; background: transparent; padding: 8px 14px; border-radius: 999px; cursor: pointer; font-weight: 500; color: var(--ink-2); transition: background-color 160ms var(--ease-out), color 160ms var(--ease-out); }
+.tabs button:hover { color: var(--ink); }
+.tabs button[aria-selected="true"] { background: var(--cobalt); color: var(--on-cobalt); }
+.board { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
+.board li { display: grid; grid-template-columns: 44px 72px 1fr auto 90px; gap: 16px; align-items: center; padding: 12px 18px; border-top: 1px solid var(--line); }
+.board li:first-child { border-top: 0; }
+.board li[data-master] { background: linear-gradient(90deg, oklch(0.96 0.04 85) 0%, var(--paper) 60%); }
+.board > li > img { width: 72px; height: 54px; object-fit: cover; border-radius: 8px; }
+.pos { font-family: var(--display); font-weight: 800; font-size: 1.8rem; line-height: 1; color: var(--ink-3); }
+[data-master] .pos { color: var(--gold-deep); }
+.name { display: flex; flex-direction: column; min-width: 0; }
+.name a { font-weight: 600; text-decoration: none; font-size: 1.05rem; }
+.name a:hover { color: var(--cobalt); }
+.name small { color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rating { text-align: right; font-family: var(--display); font-weight: 800; font-size: 1.6rem; }
+.rating small { font-family: var(--text); font-size: 0.75rem; font-weight: 600; color: var(--ink-3); margin-left: 3px; }
+.none { display: block !important; color: var(--ink-2); }
+
+@media (max-width: 960px) {
+  .tiers { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 620px) {
+  .tiers { grid-template-columns: repeat(2, 1fr); }
+  .board li { grid-template-columns: 30px 1fr auto; gap: 10px; padding: 12px; }
+  .board > li > img, .board li > :nth-child(4) { display: none; }
+}

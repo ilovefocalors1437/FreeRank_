@@ -1,104 +1,91 @@
-# freelance-search
+<p align="center"><img src="web/public/brand/freerank-logo.svg" alt="FreeRank" width="360"></p>
 
-Prototype search engine for a freelance marketplace where **vector search is one recall
-layer, not the system**. Ranking reads *evidence* (portfolio facts, client jobs,
-verified credentials), never self-claimed tags, and an authenticity layer holds stolen
-portfolios back before they can rank. Zero dependencies, Node 18+.
+# FreeRank
 
-```bash
-npm start      # console + API on http://localhost:3399  (PORT to change)
-npm test       # golden set + attack simulations, exits 1 on any failure
-```
+A freelance marketplace where **rank is earned from paid client work and a checked
+portfolio** — and where stolen portfolios never reach the ladder.
 
-## What happens to a request
-
-```
-text / tags / reference image
-  └─ SearchSpec  (spec.js: rule stub, or an LLM writes the same JSON)
-       └─ recall, every channel gated by hard filters          (search.js)
-            visual    opponent-colour image vector, cosine      ← the only ANN-shaped part
-            lexical   BM25 over title + description + tools     (tags excluded: they are claims)
-            semantic  hashed bag-of-words cosine                ← swap point for bge/e5
-            skills    evidence-weighted skill score
-       └─ RRF fusion → features → query-adaptive weights × trust − claim-gap penalty
-       └─ relevance gate → MMR (λ 0.92) → exploration slot for a qualified newcomer
-       └─ explanations built only from logged feature values
-```
-
-Indexing (`index.js`) runs once at startup: fingerprints and embeddings per image
-(`data.js`, `embed.js`), cross-account duplicate scan (`fraud.js`), copies held, then the
-evidence graph (`evidence.js`) and a risk tier per freelancer.
-
-| File | Design section | Job |
-|---|---|---|
-| `src/spec.js` | §3 | SearchSpec contract, `validateSpec`, rule-based `understand()`, degraded mode |
-| `src/search.js` | §5–7 | recall channels, RRF, scoring, gate, MMR, exploration, explanations |
-| `src/evidence.js` | §7 | fact extraction (VLM swap point), evidence graph, dedupe, claim gap |
-| `src/fraud.js` | §8 | dHash + LSH, recolour detection, SimHash, risk signals, tiers, review cases |
-| `src/index.js` | §4 | indexing pipeline, BM25 index, outcome rollups |
-| `src/embed.js` | §9 | deterministic stand-ins for the ML models |
-| `src/corpus-*.js` | — | 9 demo freelancers, each one a test case |
-| `eval.js` | §14 | nDCG / recall / MRR + attack suite + explanation audit |
-
-The demo corpus is built around the edge cases: **aoi** is the genuine match for the anime
-example, **king** recoloured aoi's images and uploaded them later, **max** claims 25
-skills with no evidence, **rin** uploaded one piece as five projects, **vera** is a new
-account with verified source files, and **dan** is a copywriter who must ignore images.
-
-## Plugging in an LLM as the query-understanding layer
-
-The engine never calls a model. Anything that can write the spec can drive it. POST it
-as `spec` and it's used as-is once it passes `validateSpec`. A spec that fails validation
-drops to degraded mode (tags + lexical) and the errors come back in `spec_errors`.
+> **สรุป (ไทย)** — FreeRank มีสองโหมด: **Casual** ทุกคนที่งานตรงกับที่ลูกค้าหา ได้โอกาสขึ้นเป็นคนแรกเท่ากัน (สลับลำดับทุกชั่วโมง)
+> และ **Competitive** เรียงตาม relevance × rank เข้าได้เมื่อมีลูกค้าจ่ายเงินจริง 3 รายจาก Casual + ผลงาน 3 ชิ้นที่ผ่านการตรวจ
+> Rank มี Freelance → Pro → Expert → Elite (4 ดิวิชั่นต่อเทียร์) และ **Master = ที่นั่ง** top 3 ต่อสาย (Master #1, #2, #3)
+> Rating มาจากรีวิวลูกค้า 75% + คะแนนพอร์ต 25% (MiMo ให้คะแนนได้ถ้าตั้งค่า) — กฎทั้งหมดอยู่ใน [docs/RANKS.md](docs/RANKS.md)
+> ทุกรูปที่อัปโหลดถูกเทียบลายนิ้วมือกับทุกรูปในระบบ เจอซ้ำ = hold + ยื่นอุทธรณ์ได้ (เช่น ขายหลายแพลตฟอร์ม) คนตัดสินเท่านั้นที่ปล่อยหรือลบ
 
 ```bash
-curl -s localhost:3399/api/search -H "content-type: application/json" -d '{
-  "spec": {
-    "spec_version": "1", "producer": "claude",
-    "work_type": { "category": "3d_character", "confidence": 0.9, "visual": true },
-    "style": { "attributes": { "stylized_anime": 0.9, "cel_shaded": 0.8 } },
-    "skills": [ { "skill": "blender", "weight": 0.9 }, { "skill": "rigging", "weight": 0.8 } ],
-    "technical_requirements": [ { "req": "rigged", "weight": 0.8 } ],
-    "difficulty": { "score": 0.7 },
-    "expanded_terms": ["anime", "rigged", "character", "blender"],
-    "hard_filters": { "accepting_work": true }
-  }
-}'
+npm install --prefix web     # once
+npm run build                # builds the web app into web/dist
+npm start                    # API + web on http://localhost:3399
+npm test                     # 39 checks: search quality, attacks, arenas, rank maths
 ```
 
-Vocabulary: `GET /api/meta` → `vocabulary` (categories, style keys, tech requirements).
-Skills are free strings; the ones with evidence rules are the keys of `SKILL_RULES` in
-`evidence.js`. In the console, **Edit spec** does the same thing by hand.
+For frontend work, run `npm start` and `npm run dev` together (Vite on :5178 proxies
+`/api` to :3399). The engine's own test console is at `/console`.
 
-## API
+## What's in it
 
-| Route | |
+| | |
 |---|---|
-| `POST /api/search` | `{text, tags, image?, spec?, k?}` → spec, weights, channels, results, blocked, below_floor, timing |
-| `POST /api/understand` | same input → the SearchSpec only |
-| `GET /api/trust` | review queue, image and text duplicate edges, per-account risk |
-| `GET /api/freelancers` | profiles with evidence scores and held projects |
-| `GET /api/log` | last 200 queries (the future learning-to-rank set) |
+| **Search** (`src/search.js`) | Hybrid engine: a request becomes a SearchSpec, four recall channels (visual, BM25, semantic, skill evidence) are fused with RRF, then evidence-weighted scoring with explanations built from logged features. The two arenas sit on top: Casual = fair rotation, Competitive = relevance × rank. |
+| **Ranks** (`src/rank.js`, [docs/RANKS.md](docs/RANKS.md)) | Bayesian client score + confidence-shrunk portfolio grade → rating → tier/division; Master seats per craft; entry gate; demotion shield; collusion decay. |
+| **Authenticity** (`src/fraud.js`, `src/portfolio.js`, `src/appeals.js`) | 256-bit structure fingerprints on every image, cross-account duplicate scan, recolour detection, claim/evidence gap, portfolio padding, risk tiers, upload check, appeals with a human review queue. |
+| **Studio uploads** (`src/uploads.js`) | Publish → re-checked server-side → index rebuilt. Matches are stored held; an approved appeal puts them live. |
+| **Grader** (`src/grader.js`) | Portfolio grade from an OpenAI-compatible vision model when configured, deterministic estimate otherwise. |
+| **Web** (`web/`) | React 19 + Vite 8 + TypeScript. Landing, search, profiles, ladder/leaderboards, studio, review queue. |
+| **Assets** (`assets-src/`) | Blender scripts for the 3D tier emblems and every portfolio render, a Chrome-rendered set for UI/brand/copy work, the fingerprint measurement script. |
 
-`image` is an 8×8 thumbnail `{w: 8, h: 8, rgb: [192 numbers]}`. The console downsamples uploads in the browser.
+## Using MiMo (or another model) as the grader
 
-## What is real and what is a stand-in
+```bash
+GRADER_BASE_URL=https://token-plan-sgp.xiaomimimo.com/v1 GRADER_API_KEY=... GRADER_MODEL=mimo-v2.6-pro npm start
+```
 
-Real: the pipeline shape, the RRF/scoring/gating/MMR/exploration logic, the evidence
-maths, LSH-banded dHash duplicate detection, recolour and SimHash detection, the risk
-tiers, and the explanation ledger.
+The grade is a *feature*: schema-checked, clamped, blended 70/30 with the deterministic
+estimate, and it falls back to the estimate if the model fails. The model has to accept
+images (`image_url` content). The Studio says which grader produced each grade.
 
-Stand-ins, each behind one function:
+## Rebuilding the assets
 
-- `gridVector` is a toy image vector. Replace it with SigLIP/DINOv2, then re-measure `calib()` in `search.js`: it's tuned to this vector's measured background cosine (median 0.48).
-- `textVector` is hashed bag-of-words. Replace it with bge/e5.
-- `extractFacts` uses regex over project text. Replace it with a VLM that reads the images too.
-- The style probe is kNN over labelled portfolio images. Replace it with zero-shot style heads.
+```bash
+node assets-src/jobs.mjs > assets-src/.cache/jobs.json
+blender --background --python assets-src/blender/portfolio.py -- assets-src/.cache/jobs.json assets-src/.cache/raw
+node assets-src/html-render.mjs assets-src/.cache/jobs.json assets-src/.cache/raw
+python assets-src/finalize.py assets-src/.cache/jobs.json assets-src/.cache/raw web/public/assets/portfolio data/grids.json
+node assets-src/measure-fp.mjs          # re-check thresholds whenever images change
+blender --background --python assets-src/blender/emblems.py -- assets-src/.cache/emblems-hi
+python assets-src/export_emblems.py assets-src/.cache/emblems-hi web/public/assets/emblems
+python assets-src/logo.py
+```
 
-## Known limits
+Blender 5.2, Python with Pillow and fontTools, and Chrome are the only tools needed.
 
-- **Crops defeat 8×8 dHash.** Production needs ORB+RANSAC or patch-embedding matching (design §8, layer 2). It's not faked here.
-- **Earliest uploader wins.** A thief who uploads before the real artist joins wins the tie. Verified source files are the tie-break, and the appeal path is a human one.
-- **Thresholds were measured on this corpus.** Copies sit at dHash ≤ 2 / SimHash ≤ 6, unrelated work at ≥ 7 / ≥ 17. The gap is narrow on 8×8 images; re-measure on real data.
-- **The golden labels were written by the person who tuned the engine.** They guard against regressions; they don't prove quality. Real judgments need 2–3 graders pooling top-20s.
-- Everything is in memory and rebuilt at startup (~10 ms for this corpus). Postgres + pgvector is the next step (design §10).
+## Demo data
+
+26 invented freelancers across five crafts, each with a job history. Nobody's rank is
+typed in; `rank.js` derives it. The cast includes the test cases:
+
+| | |
+|---|---|
+| **aoi** | genuine stylized-character artist, Elite |
+| **king** | uploaded aoi's renders hue-shifted and brightened → held, never in search |
+| **max** | claims 25 skills, shows none → under review, never ranked |
+| **rin** | one character uploaded as five projects → counted once |
+| **vera** | new, verified source files, no clients yet → Casual only, on equal terms |
+| **kenta / ivan / hana / theo / maya** | Masters of their crafts |
+
+## Honest limits
+
+- **The image and text "embeddings" are stand-ins** (8×8 colour layout, hashed bag of
+  words). The visual channel mostly sees palette, which is why the arenas don't trust
+  it for inclusion. Swap `gridVector` / `textVector` in `src/embed.js` for SigLIP / bge
+  and re-measure `calib()` in `search.js`.
+- **The fingerprint margins were measured on procedural renders** that share
+  compositions: theft at 17–18 bits against honest work at 21+. Re-run
+  `assets-src/measure-fp.mjs` on real portfolios; crops are not handled (that needs
+  keypoint matching).
+- **External reverse image search is not wired in.** The internal index is the only
+  duplicate check.
+- **The relevance labels in the eval were written by the builder.** They guard against
+  regressions; they don't prove quality.
+- Everything is in memory and rebuilt at start (~70 ms). Uploads and appeals persist to
+  `data/*.json` (git-ignored). There are no accounts: the Studio's "viewing as" picker
+  stands in for sign-in.

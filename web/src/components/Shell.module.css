@@ -1,0 +1,43 @@
+.skip { position: absolute; left: 12px; top: -60px; z-index: var(--z-toast); background: var(--ink); color: var(--paper); padding: 8px 14px; border-radius: var(--r); }
+.skip:focus { top: 12px; }
+
+.header {
+  position: sticky; top: 0; z-index: var(--z-sticky);
+  background: color-mix(in oklch, var(--paper) 88%, transparent);
+  backdrop-filter: saturate(1.4) blur(14px);
+  border-bottom: 1px solid var(--line);
+}
+.overlay { position: absolute; left: 0; right: 0; background: transparent; backdrop-filter: none; border-bottom-color: transparent; color: var(--on-cobalt); }
+.bar { display: flex; align-items: center; gap: 28px; height: 68px; }
+.home { text-decoration: none; display: inline-flex; }
+.nav { display: flex; gap: 4px; margin-left: 12px; }
+.link {
+  text-decoration: none; padding: 8px 12px; border-radius: 999px; font-weight: 500; font-size: 0.95rem; color: var(--ink-2);
+  transition: color 160ms var(--ease-out), background-color 160ms var(--ease-out);
+}
+.link:hover { color: var(--ink); background: var(--canvas); }
+.active { color: var(--ink); background: var(--cobalt-soft); }
+.overlay .link { color: var(--on-cobalt-2); }
+.overlay .link:hover { color: var(--on-cobalt); background: oklch(1 0 0 / 0.08); }
+.cta { margin-left: auto; }
+
+.footer { margin-top: 96px; background: var(--paper); border-top: 1px solid var(--line); }
+.foot { display: grid; grid-template-columns: 1fr 1.4fr; gap: 48px; padding-block: 56px 36px; }
+.brand { display: flex; flex-direction: column; gap: 16px; max-width: 34ch; color: var(--ink-2); }
+.cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+.cols h2 { font-size: 0.8125rem; font-weight: 600; color: var(--ink); margin-bottom: 10px; }
+.cols a { display: block; color: var(--ink-2); text-decoration: none; padding: 4px 0; font-size: 0.95rem; }
+.cols a:hover { color: var(--cobalt); }
+.legal { padding-block: 18px 28px; border-top: 1px solid var(--line); color: var(--ink-3); font-size: 0.8125rem; }
+
+@media (max-width: 760px) {
+  .bar { gap: 12px; height: 60px; }
+  .nav { margin-left: 0; gap: 0; overflow-x: auto; }
+  .link { padding: 6px 9px; font-size: 0.875rem; }
+  .cta { display: none; }
+  .foot { grid-template-columns: 1fr; gap: 32px; }
+  .cols { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 420px) {
+  .home span span { display: none; }
+}

@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { fingerprint, decodeGray, hamming, cosine, colorSignature } from "../src/embed.js";
 
 const grids = JSON.parse(readFileSync(new URL("../data/grids.json", import.meta.url)));
-const ids = Object.keys(grids).filter((i) => !i.startsWith("ref-"));
+const ids = Object.keys(grids).filter((i) => !i.startsWith("ref-") && !i.startsWith("fx-")); // fixtures are deliberate copies
 const fp = Object.fromEntries(ids.map((i) => [i, { ...fingerprint(decodeGray(grids[i].g64)), color: colorSignature(grids[i]) }]));
 const owner = (i) => i.split("-")[0];
 const theft = [];

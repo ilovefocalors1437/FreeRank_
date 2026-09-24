@@ -313,7 +313,15 @@ export function search(index, req = {}) {
   // A different line of work only qualifies on evidence for the requested skills —
   // shared words or a vaguely similar palette are not enough.
   const crossCategory = (c) => c.features.worktype === 0 && (c.features.skills ?? 0) < RELEVANCE_GATE;
-  const passes = (c) => c.score >= SCORE_FLOOR && queryEvidence(c) >= RELEVANCE_GATE && !crossCategory(c);
+  // In the two client-facing arenas the work type must match, unless skill evidence
+  // for this exact request is strong. Casual has no ranking after the gate (whoever
+  // passes gets equal turns), and Competitive's rank boost would otherwise lift a
+  // props Master above character artists on a character request — both measured.
+  // Generic query words ("game", "stylized") don't count, and neither does the
+  // visual channel: the toy embedder mostly sees palette, so a pastel mushroom
+  // "looks like" a pastel anime character. (Revisit with a real image embedder.)
+  const arenaFit = (c) => arena === "open" || cat == null || c.features.worktype === 1 || (c.features.skills ?? 0) >= 0.6;
+  const passes = (c) => c.score >= SCORE_FLOOR && queryEvidence(c) >= RELEVANCE_GATE && !crossCategory(c) && arenaFit(c);
   const shortlist = candidates.filter(passes).sort((a, b) => b.score - a.score);
   const belowFloor = candidates
     .filter((c) => !passes(c))

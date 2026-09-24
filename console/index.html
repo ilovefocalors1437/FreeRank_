@@ -613,7 +613,7 @@ async function renderTrust() {
 }
 
 async function renderIndex() {
-  const list = await api("/api/freelancers");
+  const list = await api("/api/console/freelancers");
   const p = $("#p-index");
   p.innerHTML = `<div class="section-title"><h2>Indexed freelancers</h2><span class="muted">skill scores are evidence (cap 6), never claims · red outline = held image</span></div>
     <table class="plain"><thead><tr><th>freelancer</th><th>portfolio</th><th>evidenced skills</th><th>claimed, no evidence</th><th class="num">client jobs</th></tr></thead><tbody></tbody></table>`;

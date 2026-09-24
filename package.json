@@ -1,11 +1,14 @@
 {
-  "name": "freelance-search",
-  "version": "0.1.0",
-  "description": "Hybrid search engine prototype for a freelance marketplace. Vector search is ONE recall layer, not the system. Zero dependencies.",
+  "name": "freerank",
+  "version": "0.2.0",
+  "description": "FreeRank: a freelance marketplace where rank is earned from paid client work and a checked portfolio. Hybrid search engine, rank ladder, portfolio authenticity. Zero-dependency API; React web app in web/.",
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "test": "node eval.js"
+    "test": "node eval.js",
+    "build": "npm --prefix web run build",
+    "dev": "npm --prefix web run dev",
+    "measure": "node assets-src/measure-fp.mjs"
   },
   "engines": {
     "node": ">=18"

@@ -310,7 +310,14 @@ def build_chibi(p, root):
         finish(ellipsoid((0.86, -0.05, 1.9), (0.16, 0.16, 0.16)), toon(outfit2 if outfit2 != "#ffffff" else p["eyes"], glow=0.4), root)
         finish(torus((0.85, -0.05, 1.9), 0.2, 0.03, rot=(90, 0, 0)), T("#f5c542"), root)
     elif acc == "headphones":
-        finish(torus((0, 0.05, 1.5), 0.74, 0.05, rot=(90, 0, 90)), T(outfit), root)
+        # band from ear to ear over the crown: a torus in the XZ plane, lower half removed
+        band = torus((0, 0.05, 1.5), 0.74, 0.05, rot=(90, 0, 0))
+        bm = bmesh.new()
+        bm.from_mesh(band.data)
+        bmesh.ops.delete(bm, geom=[v for v in bm.verts if v.co.z < -0.05], context="VERTS")
+        bm.to_mesh(band.data)
+        bm.free()
+        finish(band, T(outfit), root)
         for side in (-1, 1):
             finish(cylinder((side * 0.72, 0.02, 1.4), 0.17, 0.14, rot=(0, 90, 0)), T(outfit2), root)
     elif acc == "helmet":
