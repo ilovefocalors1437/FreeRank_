@@ -1,0 +1,13 @@
+{
+  "name": "freelance-search",
+  "version": "0.1.0",
+  "description": "Hybrid search engine prototype for a freelance marketplace. Vector search is ONE recall layer, not the system. Zero dependencies.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node eval.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
