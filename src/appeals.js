@@ -6,10 +6,10 @@
 // actually settles it. Appeals go to the human review queue — nothing is taken
 // down or restored automatically.
 //
-// Stored in data/appeals.json (git-ignored) so a demo survives restarts.
+// Persisted through src/storage.js (data/appeals.json on the server, localStorage
+// in the static demo) so a demo survives restarts.
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
-import { randomUUID } from "node:crypto";
+import { storage } from "./storage.js";
 
 export const REASONS = {
   original_author: { label: "I made this — the other upload copied me", needs: "a source file, WIP screenshots or a timelapse link" },
@@ -19,17 +19,16 @@ export const REASONS = {
 };
 const STATUSES = ["submitted", "in_review", "approved", "rejected"];
 
-const FILE = new URL("../data/appeals.json", import.meta.url);
-let appeals = [];
-try {
-  if (existsSync(FILE)) appeals = JSON.parse(readFileSync(FILE, "utf8"));
-} catch {
-  appeals = [];
-}
-const save = () => {
-  mkdirSync(new URL("../data/", import.meta.url), { recursive: true });
-  writeFileSync(FILE, JSON.stringify(appeals, null, 2));
+// Loaded on first use, so the host can pick a storage backend before that.
+let appeals = null;
+const all = () => {
+  if (!appeals) {
+    const stored = storage().load("appeals");
+    appeals = Array.isArray(stored) ? stored : [];
+  }
+  return appeals;
 };
+const save = () => storage().save("appeals", appeals);
 
 const bad = (msg) => Object.assign(new Error(msg), { status: 400 });
 
@@ -42,7 +41,7 @@ export function createAppeal(index, b) {
   if (reason !== "other" && !links.length && message.length < 20) throw bad(`this reason needs ${REASONS[reason].needs}`);
   const match = b.matchProject ? index.projectById.get(String(b.matchProject)) : null;
   const appeal = {
-    id: randomUUID().slice(0, 8),
+    id: crypto.randomUUID().slice(0, 8),
     createdAt: new Date().toISOString(),
     status: "submitted",
     freelancerId: b.freelancerId ? String(b.freelancerId).slice(0, 40) : null,
@@ -52,18 +51,18 @@ export function createAppeal(index, b) {
     reason,
     message,
     links,
-    verificationCode: `FR-${randomUUID().slice(0, 6).toUpperCase()}`,
+    verificationCode: `FR-${crypto.randomUUID().slice(0, 6).toUpperCase()}`,
     history: [{ at: new Date().toISOString(), status: "submitted" }],
   };
-  appeals.unshift(appeal);
+  all().unshift(appeal);
   save();
   return appeal;
 }
 
-export const listAppeals = () => appeals;
+export const listAppeals = () => all();
 
 export function updateAppeal(id, b) {
-  const a = appeals.find((x) => x.id === id);
+  const a = all().find((x) => x.id === id);
   if (!a) throw Object.assign(new Error("no such appeal"), { status: 404 });
   if (!STATUSES.includes(b.status)) throw bad(`status must be one of ${STATUSES.join(", ")}`);
   a.status = b.status;

@@ -10,6 +10,8 @@
 // The LLM's answer is a *feature*: it is schema-checked, clamped, and blended with
 // the estimate, never trusted raw. A grader outage falls back to the estimate.
 
+// process.env on the server; the static demo build has no environment (and no key).
+const env = () => globalThis.process?.env ?? {};
 const clamp01 = (x) => Math.max(0, Math.min(1, Number.isFinite(x) ? x : 0));
 
 export function estimateGrade(p) {
@@ -21,8 +23,8 @@ export function estimateGrade(p) {
 }
 
 export function graderStatus() {
-  const on = !!(process.env.GRADER_BASE_URL && process.env.GRADER_API_KEY && process.env.GRADER_MODEL);
-  return { llm: on ? process.env.GRADER_MODEL : null, fallback: "system_estimate" };
+  const on = !!(env().GRADER_BASE_URL && env().GRADER_API_KEY && env().GRADER_MODEL);
+  return { llm: on ? env().GRADER_MODEL : null, fallback: "system_estimate" };
 }
 
 const RUBRIC = `You grade one freelance portfolio piece for a marketplace. Judge the craft you can SEE, not the claims.
@@ -34,11 +36,11 @@ export async function gradeProject(p, imageDataUrl) {
   const est = estimateGrade(p);
   if (!graderStatus().llm || !imageDataUrl) return est;
   try {
-    const res = await fetch(`${process.env.GRADER_BASE_URL.replace(/\/$/, "")}/chat/completions`, {
+    const res = await fetch(`${env().GRADER_BASE_URL.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${process.env.GRADER_API_KEY}` },
+      headers: { "content-type": "application/json", authorization: `Bearer ${env().GRADER_API_KEY}` },
       body: JSON.stringify({
-        model: process.env.GRADER_MODEL,
+        model: env().GRADER_MODEL,
         temperature: 0,
         max_tokens: 2000,
         messages: [
@@ -63,7 +65,7 @@ export async function gradeProject(p, imageDataUrl) {
       presentation: +presentation.toFixed(3),
       likelyAiGenerated: clamp01(j.likely_ai_generated),
       notes: String(j.notes || "").slice(0, 240),
-      source: `llm:${process.env.GRADER_MODEL}`,
+      source: `llm:${env().GRADER_MODEL}`,
     };
   } catch (err) {
     return { ...est, source: "system_estimate", graderError: String(err.message || err).slice(0, 160) };

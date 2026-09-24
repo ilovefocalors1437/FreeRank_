@@ -162,7 +162,12 @@ export function fingerprint(gray) {
 }
 
 export function decodeGray(b64) {
-  const buf = Buffer.from(b64, "base64");
+  let buf;
+  try {
+    buf = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  } catch {
+    buf = new Uint8Array(0);
+  }
   if (buf.length !== FP_SIDE * FP_SIDE) throw new Error(`gray fingerprint input must be ${FP_SIDE}x${FP_SIDE} bytes`);
   return buf;
 }

@@ -8,16 +8,15 @@
 // portfolio image (assets-src/finalize.py). A project may carry its own `img` grid
 // instead (the eval's injected attackers do).
 
-import { readFileSync, existsSync } from "node:fs";
 import { gridVector, dhash, simhash, textVector, colorSignature, fingerprint, decodeGray, FP_SIDE } from "./embed.js";
 import { extractFacts } from "./evidence.js";
 import { makeGrid } from "./data-lib.js";
 import { CORPUS } from "./corpus.js";
+import GRIDS_JSON from "../data/grids.json" with { type: "json" };
 
 export const RAW_CORPUS = CORPUS;
 
-const GRIDS_URL = new URL("../data/grids.json", import.meta.url);
-export const GRIDS = existsSync(GRIDS_URL) ? JSON.parse(readFileSync(GRIDS_URL, "utf8")) : {};
+export const GRIDS = GRIDS_JSON;
 const idSeed = (id) => [...id].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
 
 // Real pixels when the render exists; a deterministic placeholder otherwise, so the
