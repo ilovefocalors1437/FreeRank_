@@ -1,6 +1,7 @@
 import { NavLink, Link, Outlet, useLocation } from "react-router";
 import { useEffect } from "react";
 import { Logo, Mark } from "../brand/Logo";
+import { STATIC } from "../lib/api";
 import s from "./Shell.module.css";
 
 const NAV = [
@@ -58,11 +59,14 @@ export function Shell() {
             <div>
               <h2>Trust</h2>
               <Link to="/trust">Review queue</Link>
-              <a href="/console">Engine console</a>
+              {!STATIC && <a href="/console">Engine console</a>}
             </div>
           </nav>
         </div>
-        <div className={`page ${s.legal}`}>© FreeRank prototype · demo data, no real people or payments</div>
+        <div className={`page ${s.legal}`}>
+          © FreeRank prototype · demo data, no real people or payments
+          {STATIC && " · static demo: the engine runs in your browser, and uploads and appeals are saved on this device only"}
+        </div>
       </footer>
     </>
   );

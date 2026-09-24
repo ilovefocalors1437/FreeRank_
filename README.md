@@ -21,6 +21,19 @@ npm test                     # 39 checks: search quality, attacks, arenas, rank 
 For frontend work, run `npm start` and `npm run dev` together (Vite on :5178 proxies
 `/api` to :3399). The engine's own test console is at `/console`.
 
+### Static demo (GitHub Pages)
+
+Every push to `main` runs `.github/workflows/static.yml`: `npm test`, then
+`npm run build:static`, then deploy to Pages. Pages can't run `server.js`, so in that
+build the same API (`src/api.js`) runs inside the page. Uploads and appeals are saved
+in the visitor's localStorage, and the LLM grader is off, since no key goes to a
+browser. The engine console is not included. One-time setup: *Settings → Pages →
+Source: GitHub Actions*.
+
+```bash
+npm run build:static         # web/dist, served from /; set BASE_PATH=/<repo>/ for a project site
+```
+
 ## What's in it
 
 | | |

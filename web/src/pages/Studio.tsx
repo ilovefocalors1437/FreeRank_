@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { Link } from "react-router";
-import { api, type Appeal, type Grid, type Upload as Published, type UploadCheck } from "../lib/api";
+import { api, asset, type Appeal, type Grid, type Upload as Published, type UploadCheck } from "../lib/api";
 import { useAsync, useMeta, useTitle } from "../lib/hooks";
 import { analyseImage, fetchAsBlob } from "../lib/image";
 import { RankBadge } from "../components/Rank";
@@ -41,7 +41,7 @@ export function Studio() {
     }
   }
   const sample = async (path: string, name: string, t: string, d: string) => {
-    await take(await fetchAsBlob(path), name);
+    await take(await fetchAsBlob(asset(path)), name);
     setTitle(t);
     setDescription(d);
   };

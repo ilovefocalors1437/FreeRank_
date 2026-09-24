@@ -23,7 +23,7 @@ export function Trust() {
   useTitle("Review queue");
   const meta = useMeta();
   const appeals = useAsync(() => api.appeals(), []);
-  const trust = useAsync(() => fetch("/api/trust").then((r) => r.json() as Promise<TrustData>), []);
+  const trust = useAsync(() => api.trust<TrustData>(), []);
   const open = (appeals.data ?? []).filter((a) => a.status === "submitted" || a.status === "in_review");
   const closed = (appeals.data ?? []).filter((a) => a.status === "approved" || a.status === "rejected");
 

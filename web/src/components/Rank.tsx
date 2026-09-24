@@ -1,5 +1,5 @@
 import { useRef, type CSSProperties, type PointerEvent } from "react";
-import { TIER_NAMES, type TierId } from "../lib/api";
+import { TIER_NAMES, asset, type TierId } from "../lib/api";
 import s from "./Rank.module.css";
 
 export const TIER_COLOR: Record<TierId, string> = {
@@ -10,7 +10,7 @@ export const TIER_COLOR: Record<TierId, string> = {
   master: "var(--tier-master)",
 };
 
-export const emblemSrc = (tier: TierId, size: 160 | 640 = 160) => `/assets/emblems/${tier}-${size}.webp`;
+export const emblemSrc = (tier: TierId, size: 160 | 640 = 160) => asset(`/assets/emblems/${tier}-${size}.webp`);
 
 // A rendered 3D emblem that leans toward the pointer. Motion is a transform only
 // and stops entirely under prefers-reduced-motion (the CSS handles that).

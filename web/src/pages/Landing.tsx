@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
-import { api, type Summary, type TierId } from "../lib/api";
+import { api, asset, type Summary, type TierId } from "../lib/api";
 import { useAsync, useTitle } from "../lib/hooks";
 import { Emblem, RankBadge } from "../components/Rank";
 import { Mark } from "../brand/Logo";
@@ -20,7 +20,7 @@ export function Landing() {
   const [q, setQ] = useState("");
   const ladder = useAsync(() => api.ladder(), []);
   const people = useAsync(() => api.freelancers(), []);
-  const caught = useAsync(() => fetch("/api/trust").then((r) => r.json() as Promise<{ imageEdges: { copyProject: string; hamming: number }[] }>), []);
+  const caught = useAsync(() => api.trust<{ imageEdges: { copyProject: string; hamming: number }[] }>(), []);
   const bits = caught.data?.imageEdges.find((e) => e.copyProject === "king-p1")?.hamming;
 
   const masters = (ladder.data?.boards ?? []).flatMap((b) => b.entries.filter((e) => e.rank.tier === "master")).sort((a, b) => (b.rank.rating ?? 0) - (a.rank.rating ?? 0));
@@ -151,11 +151,11 @@ export function Landing() {
         </div>
         <figure className={s.pair}>
           <div>
-            <img src="/assets/portfolio/aoi-p1.webp" alt="Original: a cel-shaded anime heroine with pink twin tails and a staff" width={480} height={360} loading="lazy" />
+            <img src={asset("/assets/portfolio/aoi-p1.webp")} alt="Original: a cel-shaded anime heroine with pink twin tails and a staff" width={480} height={360} loading="lazy" />
             <figcaption><b>Original</b> Aoi Kurosawa, uploaded first</figcaption>
           </div>
           <div className={s.copy}>
-            <img src="/assets/portfolio/king-p1.webp" alt="The copy: the same character recoloured green and brightened" width={480} height={360} loading="lazy" />
+            <img src={asset("/assets/portfolio/king-p1.webp")} alt="The copy: the same character recoloured green and brightened" width={480} height={360} loading="lazy" />
             <figcaption><b>Held</b> recoloured copy{bits != null && ` · ${bits}/256 bits`}</figcaption>
           </div>
         </figure>

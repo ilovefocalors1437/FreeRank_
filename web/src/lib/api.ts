@@ -1,4 +1,11 @@
-// Typed client for ../server.js. Shapes mirror the server's views; see server.js.
+// Typed client for ../server.js. Shapes mirror the server's views; see src/api.js.
+// The static demo build (`npm run build:static`, GitHub Pages) has no server: the
+// same API runs inside the page instead (local-api.ts, loaded only in that build).
+
+export const STATIC = import.meta.env.MODE === "static";
+
+// Public files (web/public) under the deploy base — "/" normally, "/<repo>/" on Pages.
+export const asset = (path: string) => import.meta.env.BASE_URL + path.replace(/^\//, "");
 
 export type TierId = "freelance" | "pro" | "expert" | "elite" | "master";
 export type Arena = "casual" | "competitive";
@@ -131,6 +138,7 @@ export interface Appeal {
 }
 
 async function call<T>(path: string, init?: RequestInit & { json?: unknown }): Promise<T> {
+  if (STATIC) return (await import("./local-api")).local<T>(path, init?.method ?? "GET", init?.json);
   const res = await fetch(path, {
     ...init,
     headers: init?.json !== undefined ? { "content-type": "application/json" } : undefined,
@@ -153,6 +161,7 @@ export const api = {
   appeals: () => call<Appeal[]>("/api/appeals"),
   appeal: (body: Record<string, unknown>) => call<Appeal>("/api/appeals", { method: "POST", json: body }),
   setAppeal: (id: string, status: Appeal["status"], note?: string) => call<Appeal>(`/api/appeals/${id}`, { method: "PATCH", json: { status, note } }),
+  trust: <T>() => call<T>("/api/trust"),
 };
 
 export const TIER_NAMES: Record<TierId, string> = { freelance: "Freelance", pro: "Pro", expert: "Expert", elite: "Elite", master: "Master" };
