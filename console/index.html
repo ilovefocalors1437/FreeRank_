@@ -1,0 +1,702 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>freelance-search console</title>
+<style>
+:root {
+  --bg: oklch(1 0 0);
+  --panel: oklch(0.975 0.004 290);
+  --line: oklch(0.905 0.008 290);
+  --line-strong: oklch(0.82 0.012 290);
+  --ink: oklch(0.23 0.018 290);
+  --ink-2: oklch(0.44 0.016 290);
+  --accent: oklch(0.5 0.17 290);
+  --accent-hover: oklch(0.44 0.17 290);
+  --accent-soft: oklch(0.95 0.03 290);
+  --bar: oklch(0.62 0.13 290);
+  --bar-track: oklch(0.93 0.01 290);
+  --pass: oklch(0.5 0.12 155);
+  --pass-soft: oklch(0.95 0.04 155);
+  --soft: oklch(0.5 0.11 65);
+  --soft-soft: oklch(0.96 0.05 80);
+  --hold: oklch(0.52 0.18 25);
+  --hold-soft: oklch(0.96 0.03 25);
+  --mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
+  --sans: system-ui, "Segoe UI", "Noto Sans Thai", "Leelawadee UI", sans-serif;
+  --r: 6px;
+  --z-sticky: 10;
+  --z-toast: 40;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: oklch(0.19 0.012 290);
+    --panel: oklch(0.225 0.014 290);
+    --line: oklch(0.31 0.016 290);
+    --line-strong: oklch(0.4 0.02 290);
+    --ink: oklch(0.94 0.008 290);
+    --ink-2: oklch(0.74 0.014 290);
+    --accent: oklch(0.72 0.14 290);
+    --accent-hover: oklch(0.78 0.13 290);
+    --accent-soft: oklch(0.3 0.06 290);
+    --bar: oklch(0.68 0.13 290);
+    --bar-track: oklch(0.3 0.016 290);
+    --pass: oklch(0.76 0.13 155);
+    --pass-soft: oklch(0.3 0.05 155);
+    --soft: oklch(0.8 0.12 75);
+    --soft-soft: oklch(0.32 0.05 75);
+    --hold: oklch(0.74 0.15 25);
+    --hold-soft: oklch(0.32 0.06 25);
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--sans); font-variant-numeric: tabular-nums; }
+h1, h2, h3 { margin: 0; font-weight: 600; text-wrap: balance; }
+h1 { font-size: 15px; }
+h2 { font-size: 14px; }
+h3 { font-size: 13px; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.muted { color: var(--ink-2); }
+.mono { font-family: var(--mono); font-size: 12.5px; }
+code { font-family: var(--mono); font-size: 12.5px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+
+header.top {
+  position: sticky; top: 0; z-index: var(--z-sticky);
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 10px 20px; background: var(--bg); border-bottom: 1px solid var(--line);
+}
+header.top .stats { color: var(--ink-2); font-size: 13px; }
+header.top .stats b { color: var(--ink); font-weight: 600; }
+header.top a { margin-left: auto; color: var(--ink-2); font-size: 13px; }
+.progress { position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--accent); transform-origin: left; transform: scaleX(0); opacity: 0; }
+.busy .progress { opacity: 1; animation: load 0.9s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+@keyframes load { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+.layout { display: grid; grid-template-columns: minmax(300px, 360px) minmax(0, 1fr); min-height: calc(100vh - 45px); }
+aside.request { background: var(--panel); border-right: 1px solid var(--line); padding: 16px 18px 28px; display: flex; flex-direction: column; gap: 16px; }
+aside.request > section { display: flex; flex-direction: column; gap: 8px; }
+label.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 600; }
+label.field span.hint, .hint { font-weight: 400; color: var(--ink-2); font-size: 12.5px; }
+textarea, input[type=text], input[type=number], select {
+  width: 100%; background: var(--bg); border: 1px solid var(--line-strong); border-radius: var(--r); padding: 7px 9px;
+  transition: border-color 150ms ease-out;
+}
+textarea:hover, input:hover, select:hover { border-color: var(--ink-2); }
+textarea { resize: vertical; min-height: 64px; }
+textarea.spec { font-family: var(--mono); font-size: 12px; line-height: 1.45; min-height: 280px; white-space: pre; tab-size: 2; }
+textarea.spec[readonly] { background: var(--panel); color: var(--ink-2); }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.btn {
+  border: 1px solid var(--line-strong); background: var(--bg); border-radius: var(--r); padding: 6px 12px; cursor: pointer; font-weight: 500;
+  transition: background-color 150ms ease-out, border-color 150ms ease-out, color 150ms ease-out;
+}
+.btn:hover { border-color: var(--ink-2); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: oklch(1 0 0); }
+.btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+@media (prefers-color-scheme: dark) { .btn.primary { color: oklch(0.18 0.02 290); } }
+.btn.small { padding: 3px 9px; font-size: 12.5px; }
+
+.refs { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; }
+.ref { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 5px 4px; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg); cursor: pointer; font-size: 11.5px; line-height: 1.25; text-align: center; color: var(--ink-2); transition: border-color 150ms ease-out; }
+.ref:hover { border-color: var(--ink-2); }
+.ref[aria-pressed=true] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); color: var(--ink); }
+.ref .none { width: 40px; height: 40px; border: 1px dashed var(--line-strong); border-radius: 3px; display: grid; place-items: center; font-size: 11px; }
+canvas.px { image-rendering: pixelated; border-radius: 3px; display: block; background: var(--bar-track); }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); font-size: 12.5px; white-space: nowrap; }
+.chip b { font-weight: 600; }
+.chip.accent { background: var(--accent-soft); border-color: transparent; }
+.chip.warn { background: var(--soft-soft); border-color: transparent; }
+.chip button { border: 0; background: none; padding: 0 0 0 2px; cursor: pointer; color: var(--ink-2); line-height: 1; }
+.errors { margin: 0; padding: 8px 10px 8px 26px; background: var(--hold-soft); color: var(--ink); border-radius: var(--r); font-size: 12.5px; }
+.errors:empty { display: none; }
+
+main { padding: 0 24px 40px; min-width: 0; }
+nav.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); position: sticky; top: 45px; background: var(--bg); z-index: var(--z-sticky); padding-top: 8px; }
+nav.tabs button { border: 0; background: none; padding: 8px 12px; cursor: pointer; color: var(--ink-2); border-bottom: 2px solid transparent; margin-bottom: -1px; font-weight: 500; transition: color 150ms ease-out; }
+nav.tabs button:hover { color: var(--ink); }
+nav.tabs button[aria-selected=true] { color: var(--ink); border-bottom-color: var(--accent); }
+nav.tabs .count { color: var(--ink-2); font-weight: 400; margin-left: 3px; }
+[role=tabpanel] { padding-top: 16px; }
+[role=tabpanel][hidden] { display: none; }
+
+.summary-bar { display: flex; flex-direction: column; gap: 8px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.summary-bar .line { display: flex; gap: 14px; flex-wrap: wrap; align-items: baseline; font-size: 13px; }
+.mode { font-weight: 600; }
+.mode.degraded { color: var(--soft); }
+#results { transition: opacity 180ms ease-out; }
+.busy #results { opacity: 0.55; }
+ol.results { list-style: none; margin: 0; padding: 0; }
+li.result { display: grid; grid-template-columns: 28px 64px minmax(0, 1fr) auto; gap: 4px 14px; padding: 18px 0; border-bottom: 1px solid var(--line); }
+li.result .rank { font-size: 18px; font-weight: 600; color: var(--ink-2); line-height: 1.2; }
+li.result .who { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+li.result .who .name { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-weight: 600; font-size: 15px; }
+li.result .score { text-align: right; }
+li.result .score b { font-size: 20px; font-weight: 600; display: block; line-height: 1.1; }
+li.result .score span { font-size: 12px; color: var(--ink-2); }
+li.result .body { grid-column: 3 / 5; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(260px, 1fr); gap: 16px 28px; margin-top: 6px; }
+li.result .because { font-size: 14px; max-width: 72ch; margin: 0 0 6px; }
+ul.reasons, ul.caveats { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+ul.caveats { margin-top: 8px; color: var(--ink-2); list-style: none; padding-left: 0; }
+ul.caveats li { display: flex; gap: 6px; }
+ul.caveats li::before { content: "!"; flex: none; width: 15px; height: 15px; margin-top: 2px; border-radius: 50%; background: var(--soft-soft); color: var(--soft); font-size: 11px; font-weight: 700; display: grid; place-items: center; }
+.badge { font-size: 11.5px; font-weight: 600; padding: 0 7px; border-radius: 999px; line-height: 18px; white-space: nowrap; }
+.badge.pass { background: var(--pass-soft); color: var(--pass); }
+.badge.soft_flag { background: var(--soft-soft); color: var(--soft); }
+.badge.hard_hold { background: var(--hold-soft); color: var(--hold); }
+.badge.slot { background: var(--accent-soft); color: var(--accent); }
+.badge.plain { background: var(--panel); color: var(--ink-2); border: 1px solid var(--line); }
+
+table.features { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+table.features th { text-align: left; font-weight: 500; color: var(--ink-2); padding: 2px 8px 2px 0; white-space: nowrap; }
+table.features td { padding: 2px 0 2px 8px; text-align: right; white-space: nowrap; }
+table.features td.bar { width: 100%; padding-left: 0; }
+.meter { position: relative; height: 8px; background: var(--bar-track); border-radius: 4px; overflow: hidden; }
+.meter i { position: absolute; inset: 0 auto 0 0; background: var(--bar); border-radius: 4px; transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1); }
+table.features tr.off th, table.features tr.off td { color: var(--ink-2); opacity: 0.6; }
+table.features tfoot td, table.features tfoot th { border-top: 1px solid var(--line); padding-top: 4px; }
+details { font-size: 13px; }
+details summary { cursor: pointer; color: var(--ink-2); padding: 2px 0; width: fit-content; }
+details summary:hover { color: var(--ink); }
+details[open] summary { margin-bottom: 6px; }
+table.plain { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+table.plain th, table.plain td { text-align: left; padding: 5px 10px 5px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.plain th { font-weight: 500; color: var(--ink-2); white-space: nowrap; }
+table.plain td.num, table.plain th.num { text-align: right; }
+
+.notshown { margin-top: 26px; display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.notshown section { display: flex; flex-direction: column; gap: 8px; }
+.notshown ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+.notshown li { padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r); }
+.notshown li.held { background: var(--hold-soft); border-color: transparent; }
+.empty { color: var(--ink-2); font-size: 13px; padding: 4px 0; }
+
+.case { padding: 16px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+.case header { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.pairs { display: flex; flex-wrap: wrap; gap: 12px; }
+.pair { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r); font-size: 12.5px; }
+.pair figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11.5px; color: var(--ink-2); }
+.pair .arrow { color: var(--ink-2); }
+.section-title { display: flex; gap: 10px; align-items: baseline; margin: 22px 0 8px; }
+.section-title:first-child { margin-top: 0; }
+.thumbs { display: flex; gap: 4px; flex-wrap: wrap; }
+.thumbs canvas.held { outline: 2px solid var(--hold); outline-offset: 1px; }
+.toast { position: fixed; right: 20px; bottom: 20px; z-index: var(--z-toast); background: var(--hold-soft); color: var(--ink); border-radius: var(--r); padding: 10px 14px; max-width: 420px; font-size: 13px; box-shadow: 0 4px 16px oklch(0 0 0 / 0.12); }
+.toast[hidden] { display: none; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+@media (max-width: 1100px) {
+  li.result .body { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 820px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  aside.request { border-right: 0; border-bottom: 1px solid var(--line); }
+  nav.tabs { top: 0; position: static; overflow-x: auto; }
+  main { padding: 0 16px 32px; }
+  li.result { grid-template-columns: 24px 48px minmax(0, 1fr) auto; gap: 4px 10px; }
+  li.result .body { grid-column: 1 / 5; }
+  table.plain { display: block; overflow-x: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0ms !important; animation: none !important; }
+  .busy .progress { opacity: 1; transform: scaleX(1); }
+}
+</style>
+</head>
+<body>
+<header class="top" id="top">
+  <h1>freelance-search <span class="muted" style="font-weight:400">test console</span></h1>
+  <div class="stats" id="stats">loading index…</div>
+  <a href="/api/meta" target="_blank" rel="noopener">API</a>
+  <div class="progress" aria-hidden="true"></div>
+</header>
+
+<div class="layout">
+  <aside class="request" aria-label="Request">
+    <section>
+      <label class="field">Scenario
+        <select id="scenario"><option value="">— custom request —</option></select>
+      </label>
+    </section>
+
+    <form id="form" style="display:contents">
+      <section>
+        <label class="field">What the client typed
+          <textarea id="text" rows="3" placeholder="e.g. need something like this for a game" spellcheck="false"></textarea>
+          <span class="hint">English or Thai. Ctrl+Enter searches.</span>
+        </label>
+      </section>
+
+      <section>
+        <label class="field" for="tagInput">Tags <span class="hint">optional — Enter to add</span></label>
+        <div class="chips" id="tagChips"></div>
+        <input type="text" id="tagInput" placeholder="Blender, character design…" autocomplete="off">
+      </section>
+
+      <section>
+        <div class="field" style="font-weight:600;font-size:13px">Reference image <span class="hint">what the engine sees is 8×8</span></div>
+        <div class="refs" id="refs" role="group" aria-label="Reference image"></div>
+        <div class="row">
+          <label class="btn small" for="upload" style="display:inline-block">Upload image…</label>
+          <input type="file" id="upload" accept="image/*" class="sr">
+          <span class="hint" id="uploadNote"></span>
+        </div>
+      </section>
+
+      <section>
+        <div class="row">
+          <label class="row" style="gap:6px;font-size:13px">Results <input type="number" id="k" min="1" max="20" value="8" style="width:64px"></label>
+          <button class="btn primary" type="submit" id="go" style="margin-left:auto">Search</button>
+        </div>
+      </section>
+    </form>
+
+    <section>
+      <div class="row" style="justify-content:space-between">
+        <h2>SearchSpec</h2>
+        <span class="chip" id="producer">—</span>
+      </div>
+      <p class="hint" style="margin:0">The engine's only input. The rule stub writes it from your request; you (or an LLM) can rewrite it and run it as-is.</p>
+      <textarea class="spec" id="spec" readonly spellcheck="false" aria-label="SearchSpec JSON"></textarea>
+      <ul class="errors" id="specErrors" aria-live="polite"></ul>
+      <div class="row">
+        <button class="btn small" type="button" id="editSpec">Edit spec</button>
+        <button class="btn small primary" type="button" id="runSpec" hidden>Run this spec</button>
+        <button class="btn small" type="button" id="resetSpec" hidden>Discard edits</button>
+      </div>
+    </section>
+  </aside>
+
+  <main>
+    <nav class="tabs" role="tablist" aria-label="Views">
+      <button role="tab" aria-selected="true" aria-controls="p-results" id="t-results">Results</button>
+      <button role="tab" aria-selected="false" aria-controls="p-trust" id="t-trust">Trust &amp; safety <span class="count" id="caseCount"></span></button>
+      <button role="tab" aria-selected="false" aria-controls="p-index" id="t-index">Index</button>
+      <button role="tab" aria-selected="false" aria-controls="p-log" id="t-log">Query log</button>
+    </nav>
+
+    <section role="tabpanel" id="p-results" aria-labelledby="t-results" aria-live="polite">
+      <div class="summary-bar" id="summary"><p class="empty">Pick a scenario or type a request, then search.</p></div>
+      <div id="results"></div>
+    </section>
+    <section role="tabpanel" id="p-trust" aria-labelledby="t-trust" hidden></section>
+    <section role="tabpanel" id="p-index" aria-labelledby="t-index" hidden></section>
+    <section role="tabpanel" id="p-log" aria-labelledby="t-log" hidden></section>
+  </main>
+</div>
+<div class="toast" id="toast" role="alert" hidden></div>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmt = (x, d = 2) => (x == null ? "—" : Number(x).toFixed(d));
+const human = (s) => String(s).replace(/_/g, " ");
+const TIER = { pass: "pass", soft_flag: "under review", hard_hold: "held" };
+const FEATURE_LABEL = { visual: "visual match", text: "text match", worktype: "work type", skills: "skill evidence", tech: "tech reqs", difficulty: "difficulty fit", outcome: "client outcomes" };
+
+const state = { meta: null, tags: [], image: null, imageId: null, specDirty: false, lastSpec: null, lastReq: null };
+
+async function api(path, body) {
+  const res = await fetch(path, body ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : undefined);
+  const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+function toast(msg) {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.hidden = false;
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => (t.hidden = true), 6000);
+}
+function busy(on) { document.body.classList.toggle("busy", on); $("#go").disabled = on; }
+
+function gridCanvas(grid, size = 40, cls = "") {
+  const c = document.createElement("canvas");
+  c.width = 8; c.height = 8;
+  c.className = `px ${cls}`;
+  c.style.width = c.style.height = `${size}px`;
+  if (grid) {
+    const ctx = c.getContext("2d");
+    const img = ctx.createImageData(8, 8);
+    for (let i = 0; i < 64; i++) {
+      img.data[i * 4] = grid.rgb[i * 3];
+      img.data[i * 4 + 1] = grid.rgb[i * 3 + 1];
+      img.data[i * 4 + 2] = grid.rgb[i * 3 + 2];
+      img.data[i * 4 + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+  return c;
+}
+
+// ---------- request form
+function renderTags() {
+  const box = $("#tagChips");
+  box.innerHTML = "";
+  state.tags.forEach((t, i) => {
+    const chip = document.createElement("span");
+    chip.className = "chip";
+    chip.innerHTML = `${esc(t)}<button type="button" aria-label="Remove tag ${esc(t)}">×</button>`;
+    chip.querySelector("button").onclick = () => { state.tags.splice(i, 1); renderTags(); };
+    box.append(chip);
+  });
+}
+function addTags(raw) {
+  for (const t of raw.split(",").map((s) => s.trim()).filter(Boolean)) if (!state.tags.includes(t)) state.tags.push(t);
+  renderTags();
+}
+$("#tagInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === ",") {
+    e.preventDefault();
+    addTags(e.target.value);
+    e.target.value = "";
+  } else if (e.key === "Backspace" && !e.target.value && state.tags.length) {
+    state.tags.pop();
+    renderTags();
+  }
+});
+
+function renderRefs() {
+  const box = $("#refs");
+  box.innerHTML = "";
+  const opts = [{ id: null, label: "None", grid: null }, ...state.meta.refs];
+  if (state.imageId === "upload") opts.push({ id: "upload", label: "Your upload", grid: state.image });
+  for (const r of opts) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "ref";
+    b.setAttribute("aria-pressed", String(state.imageId === r.id));
+    if (r.grid) b.append(gridCanvas(r.grid, 40));
+    else b.insertAdjacentHTML("beforeend", `<span class="none">none</span>`);
+    b.insertAdjacentHTML("beforeend", `<span>${esc(r.label)}</span>`);
+    b.onclick = () => { setImage(r.id, r.grid); };
+    box.append(b);
+  }
+}
+function setImage(id, grid) { state.imageId = id; state.image = grid; renderRefs(); }
+
+$("#upload").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const bmp = await createImageBitmap(file);
+    const c = document.createElement("canvas");
+    c.width = 8; c.height = 8;
+    const ctx = c.getContext("2d", { willReadFrequently: true });
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(bmp, 0, 0, 8, 8);
+    const d = ctx.getImageData(0, 0, 8, 8).data;
+    const rgb = [];
+    for (let i = 0; i < 64; i++) rgb.push(d[i * 4], d[i * 4 + 1], d[i * 4 + 2]);
+    setImage("upload", { w: 8, h: 8, rgb });
+    $("#uploadNote").textContent = `${file.name} → 8×8`;
+  } catch {
+    toast("Couldn't read that image. Try a PNG or JPEG.");
+  }
+  e.target.value = "";
+});
+
+function requestBody() {
+  const pending = $("#tagInput").value.trim();
+  if (pending) { addTags(pending); $("#tagInput").value = ""; }
+  const body = { text: $("#text").value, tags: state.tags, k: Number($("#k").value) || 8 };
+  if (state.image) body.image = state.image;
+  return body;
+}
+
+function loadScenario(id) {
+  const s = state.meta.scenarios.find((x) => x.id === id);
+  if (!s) return;
+  $("#text").value = s.q.text || "";
+  state.tags = [...(s.q.tags || [])];
+  renderTags();
+  const ref = s.q.ref ? state.meta.refs.find((r) => r.id === s.q.ref) : null;
+  setImage(ref ? ref.id : null, ref ? ref.grid : null);
+}
+$("#scenario").addEventListener("change", (e) => { if (e.target.value) { loadScenario(e.target.value); run(); } });
+$("#text").addEventListener("input", () => ($("#scenario").value = ""));
+$("#text").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run(); } });
+$("#form").addEventListener("submit", (e) => { e.preventDefault(); run(); });
+
+// ---------- spec editor
+function showSpec(spec) {
+  state.lastSpec = spec;
+  if (state.specDirty) return;
+  const { probe_neighbours, ...style } = spec.style || {};
+  const shown = { ...spec, style };
+  $("#spec").value = JSON.stringify(shown, null, 2);
+  $("#producer").innerHTML = `producer <b>${esc(spec.producer || "external")}</b>`;
+}
+function setSpecEditing(on) {
+  state.specDirty = on;
+  $("#spec").readOnly = !on;
+  $("#editSpec").hidden = on;
+  $("#runSpec").hidden = !on;
+  $("#resetSpec").hidden = !on;
+  if (on) $("#spec").focus();
+}
+$("#editSpec").onclick = () => setSpecEditing(true);
+$("#resetSpec").onclick = () => { setSpecEditing(false); $("#specErrors").innerHTML = ""; if (state.lastSpec) showSpec(state.lastSpec); };
+$("#runSpec").onclick = () => {
+  let spec;
+  try { spec = JSON.parse($("#spec").value); }
+  catch (err) { $("#specErrors").innerHTML = `<li>Not valid JSON: ${esc(err.message)}</li>`; return; }
+  if (!spec.producer || spec.producer === "rule_stub") spec.producer = "hand_edited";
+  run(spec);
+};
+
+// ---------- search + results
+async function run(spec) {
+  const body = requestBody();
+  if (spec) body.spec = spec;
+  if (!body.text.trim() && !body.tags.length && !body.image && !spec) { toast("Give the engine something: a few words, a tag, or an image."); return; }
+  busy(true);
+  try {
+    const r = await api("/api/search", body);
+    state.lastReq = body;
+    if (!spec) setSpecEditing(false);
+    $("#specErrors").innerHTML = (r.spec_errors || []).map((e) => `<li>${esc(e)}</li>`).join("");
+    if (spec && r.mode === "degraded") {
+      // keep the user's broken spec on screen so they can fix it
+    } else {
+      if (spec) setSpecEditing(false);
+      showSpec(r.spec);
+    }
+    renderResults(r);
+    refreshSide();
+  } catch (err) {
+    toast(`Search failed: ${err.message}`);
+  } finally {
+    busy(false);
+  }
+}
+
+function specChips(spec) {
+  const chips = [];
+  const wt = spec.work_type || {};
+  chips.push(`<span class="chip accent">work type <b>${esc(wt.category ? human(wt.category) : "unknown")}</b> ${wt.category ? fmt(wt.confidence) : ""}</span>`);
+  const style = Object.entries(spec.style?.attributes || {}).filter(([, v]) => v >= 0.3).sort((a, b) => b[1] - a[1]);
+  if (style.length) chips.push(`<span class="chip">style <b>${style.map(([k, v]) => `${esc(human(k))} ${fmt(v)}`).join(", ")}</b></span>`);
+  for (const s of spec.skills || []) chips.push(`<span class="chip">${esc(human(s.skill))} <span class="muted">${fmt(s.weight, 1)}${s.source ? " · " + esc(human(s.source)) : ""}</span></span>`);
+  for (const t of spec.technical_requirements || []) chips.push(`<span class="chip">needs <b>${esc(human(t.req))}</b></span>`);
+  chips.push(`<span class="chip">difficulty <b>${esc(spec.difficulty?.band || "")}</b> ${fmt(spec.difficulty?.score)}</span>`);
+  for (const f of spec.ambiguity?.flags || []) chips.push(`<span class="chip warn">${esc(human(f))}</span>`);
+  return chips.join("");
+}
+
+function renderResults(r) {
+  const w = Object.entries(r.weights).filter(([, v]) => v > 0).map(([k, v]) => `${FEATURE_LABEL[k] || k} ${fmt(v)}`).join(" · ");
+  const channels = Object.entries(r.channels).map(([k, v]) => `${k} ${v.length}`).join(" · ");
+  const assumptions = (r.spec.assumptions || []).concat(r.notes || []);
+  $("#summary").innerHTML = `
+    <div class="line">
+      <span class="mode ${r.mode}">${r.mode === "full" ? "Full pipeline" : "Degraded mode: tags + lexical only"}</span>
+      <span class="muted">recall — ${esc(channels)}</span>
+      <span class="muted">${fmt(r.timing_ms.total, 1)} ms</span>
+    </div>
+    <div class="chips">${specChips(r.spec)}</div>
+    <div class="line muted">weights — ${esc(w)}</div>
+    ${assumptions.length ? `<div class="line muted">assumed — ${assumptions.map(esc).join("; ")}</div>` : ""}`;
+
+  const box = $("#results");
+  if (!r.results.length) {
+    box.innerHTML = `<p class="empty" style="padding:18px 0">Nobody cleared the relevance gate. Recall found ${r.below_floor.length} candidate(s), listed below with the reason each was dropped. Try naming the work type or adding a tag.</p>`;
+  } else {
+    box.innerHTML = `<ol class="results"></ol>`;
+    const ol = $("ol", box);
+    for (const x of r.results) ol.append(resultRow(x));
+  }
+  box.insertAdjacentHTML("beforeend", notShown(r));
+}
+
+function featureTable(x) {
+  const rows = Object.keys(FEATURE_LABEL).map((k) => {
+    const v = x.features[k];
+    const c = x.contributions[k];
+    const off = v == null || c == null;
+    return `<tr class="${off ? "off" : ""}"><th scope="row">${FEATURE_LABEL[k]}</th>
+      <td class="bar"><div class="meter" role="img" aria-label="${FEATURE_LABEL[k]} ${off ? "not used" : fmt(v)}"><i style="width:${off ? 0 : Math.round(v * 100)}%"></i></div></td>
+      <td>${off ? "n/a" : fmt(v)}</td><td class="muted">${off ? "" : "+" + fmt(c, 3)}</td></tr>`;
+  }).join("");
+  const pen = [];
+  if (x.penalties.trust_multiplier !== 1) pen.push(`× ${x.penalties.trust_multiplier} trust`);
+  if (x.penalties.claim_evidence_gap) pen.push(`− ${fmt(x.penalties.claim_evidence_gap, 3)} claim gap`);
+  return `<table class="features"><thead><tr><th>feature</th><th class="sr">value</th><td class="muted" style="text-align:right">value</td><td class="muted" style="text-align:right">adds</td></tr></thead>
+    <tbody>${rows}</tbody>
+    <tfoot><tr><th>score</th><td class="muted" style="text-align:left;padding-left:0">${esc(pen.join(", "))}</td><td colspan="2"><b>${fmt(x.score, 3)}</b></td></tr></tfoot></table>`;
+}
+
+function resultRow(x) {
+  const li = document.createElement("li");
+  li.className = "result";
+  const slot = x.slot === "exploration" ? `<span class="badge slot">exploration slot</span>` : "";
+  const newc = x.freelancer.newcomer && x.slot !== "exploration" ? `<span class="badge plain">new</span>` : "";
+  const via = Object.entries(x.recalled_via).map(([k, v]) => `${k} #${v}`).join(", ");
+  const skills = (x.skill_evidence || []).map((s) => `<tr><td>${esc(human(s.skill))}</td><td class="num">${fmt(s.weight, 1)}</td><td class="num">${fmt(s.evidence, 1)}</td><td>${esc(s.sources.map(human).join(", ") || "none")}</td><td class="num">${s.distinctProjects}</td></tr>`).join("");
+  li.innerHTML = `
+    <div class="rank">${x.rank}</div>
+    <div class="thumb"></div>
+    <div class="who">
+      <div class="name">${esc(x.freelancer.name)} <span class="badge ${x.trust.tier}">${TIER[x.trust.tier]}</span>${slot}${newc}</div>
+      <div class="muted">${esc(x.freelancer.headline)}</div>
+    </div>
+    <div class="score"><b>${fmt(x.score)}</b><span>score</span></div>
+    <div class="body">
+      <div>
+        <p class="because">${esc(x.why.summary)}</p>
+        <ul class="reasons">${x.why.reasons.filter((r, i) => i > 1 || /\(/.test(r.text)).map((r) => `<li>${esc(r.text)}</li>`).join("")}</ul>
+        ${x.why.caveats.length ? `<ul class="caveats">${x.why.caveats.map((c) => `<li>${esc(c)}</li>`).join("")}</ul>` : ""}
+        <details style="margin-top:10px"><summary>Evidence ledger</summary>
+          <p class="muted" style="margin:0 0 6px">Recalled via ${esc(via)} · RRF ${fmt(x.rrf, 4)}${x.best_project ? ` · best project “${esc(x.best_project.title)}”` : ""}</p>
+          ${skills ? `<table class="plain"><thead><tr><th>requested skill</th><th class="num">weight</th><th class="num">evidence /6</th><th>sources</th><th class="num">distinct projects</th></tr></thead><tbody>${skills}</tbody></table>` : ""}
+        </details>
+      </div>
+      <div>${featureTable(x)}</div>
+    </div>`;
+  $(".thumb", li).append(gridCanvas(x.best_project?.grid, 56));
+  return li;
+}
+
+function notShown(r) {
+  const blocked = r.blocked.map((b) => `<li class="held"><div class="row"><b>${esc(b.name)}</b><span class="badge hard_hold">held · risk ${fmt(b.risk)}</span></div><ul class="reasons" style="margin-top:4px">${b.reasons.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></li>`).join("");
+  const below = r.below_floor.map((b) => `<li><b>${esc(b.id)}</b> <span class="muted">score ${fmt(b.score)} — ${esc(b.why)}</span></li>`).join("");
+  return `<div class="notshown">
+    <section><h3>Held by trust &amp; safety</h3>${blocked ? `<ul>${blocked}</ul>` : `<p class="empty">No held account would have matched this request.</p>`}</section>
+    <section><h3>Recalled but dropped</h3>${below ? `<ul>${below}</ul>` : `<p class="empty">Every recalled candidate made the page.</p>`}</section>
+  </div>`;
+}
+
+// ---------- trust, index, log
+async function renderTrust() {
+  const t = await api("/api/trust");
+  $("#caseCount").textContent = t.cases.length ? `(${t.cases.length})` : "";
+  const cases = t.cases.map((c) => {
+    const pairs = c.evidence.image_pairs.map((e) => {
+      const d = document.createElement("div");
+      return `<div class="pair" data-a="${esc(e.originalProject)}" data-b="${esc(e.copyProject)}">
+        <figure data-grid="o"><figcaption>${esc(e.originalProject)}</figcaption></figure><span class="arrow">→</span>
+        <figure data-grid="c"><figcaption>${esc(e.copyProject)}</figcaption></figure>
+        <div><div>dHash distance <b>${e.hamming}</b>/64</div><div>colour similarity <b>${fmt(e.colorSim)}</b></div><div>${esc(human(e.kind))}</div></div></div>`;
+    }).join("");
+    return `<article class="case">
+      <header><h3>${esc(c.subject.name)}</h3><span class="badge ${c.tier}">${TIER[c.tier]} · risk ${fmt(c.risk)}</span><span class="muted">${esc(human(c.state))}</span></header>
+      <table class="plain"><thead><tr><th>signal</th><th class="num">weight</th><th>detail</th></tr></thead><tbody>
+        ${c.signals.map((s) => `<tr><td>${esc(human(s.signal))}</td><td class="num">${s.value > 0 ? "+" : ""}${fmt(s.value, 3)}</td><td>${esc(s.detail)}</td></tr>`).join("")}
+      </tbody></table>
+      ${pairs ? `<div class="pairs">${pairs}</div>` : ""}
+      <p class="muted" style="margin:0">Next step: ${esc(c.action_required)}. Nothing is taken down automatically.</p>
+    </article>`;
+  }).join("");
+  const rows = t.freelancers.map((f) => `<tr><td>${esc(f.name)}</td><td><span class="badge ${f.tier}">${TIER[f.tier]}</span></td><td class="num">${fmt(f.risk)}</td><td class="num">${f.claims}</td><td class="num">${f.unsupported}</td><td class="num">${f.distinct}/${f.projects}</td></tr>`).join("");
+  const p = $("#p-trust");
+  p.innerHTML = `
+    <div class="section-title"><h2>Review queue</h2><span class="muted">${t.cases.length} case(s) · tiers: pass &lt; 0.25 ≤ under review &lt; 0.60 ≤ held</span></div>
+    ${cases || `<p class="empty">Queue is empty.</p>`}
+    <div class="section-title"><h2>All accounts</h2><span class="muted">LSH banding checked ${t.lsh.candidatePairs} of ${t.lsh.naivePairs} possible image pairs</span></div>
+    <table class="plain"><thead><tr><th>freelancer</th><th>tier</th><th class="num">risk</th><th class="num">claims</th><th class="num">unsupported</th><th class="num">distinct / uploaded</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="section-title"><h2>Description near-copies</h2><span class="muted">SimHash, distance ≤ 10 of 64</span></div>
+    ${t.textEdges.length ? `<table class="plain"><thead><tr><th>original</th><th>copy</th><th class="num">distance</th></tr></thead><tbody>${t.textEdges.map((e) => `<tr><td>${esc(e.original)}</td><td>${esc(e.copy)}</td><td class="num">${e.hamming}</td></tr>`).join("")}</tbody></table>` : `<p class="empty">None.</p>`}`;
+  const edges = new Map(t.imageEdges.map((e) => [`${e.originalProject}|${e.copyProject}`, e]));
+  p.querySelectorAll(".pair").forEach((el) => {
+    const e = edges.get(`${el.dataset.a}|${el.dataset.b}`);
+    el.querySelector('[data-grid="o"]').prepend(gridCanvas(e?.originalGrid, 48));
+    el.querySelector('[data-grid="c"]').prepend(gridCanvas(e?.copyGrid, 48));
+  });
+}
+
+async function renderIndex() {
+  const list = await api("/api/console/freelancers");
+  const p = $("#p-index");
+  p.innerHTML = `<div class="section-title"><h2>Indexed freelancers</h2><span class="muted">skill scores are evidence (cap 6), never claims · red outline = held image</span></div>
+    <table class="plain"><thead><tr><th>freelancer</th><th>portfolio</th><th>evidenced skills</th><th>claimed, no evidence</th><th class="num">client jobs</th></tr></thead><tbody></tbody></table>`;
+  const tb = $("tbody", p);
+  for (const f of list) {
+    const tr = document.createElement("tr");
+    const ev = f.skills.filter((s) => s.score >= 0.5).map((s) => `${esc(human(s.skill))} <span class="muted">${fmt(s.score, 1)}</span>`).join(", ");
+    tr.innerHTML = `<td><b>${esc(f.name)}</b> <span class="badge ${f.trust.tier}">${TIER[f.trust.tier]}</span><div class="muted">${esc(human(f.category))}${f.newcomer ? " · new" : ""}</div></td>
+      <td><div class="thumbs"></div><div class="muted">${f.distinctProjects} distinct of ${f.projects.length}</div></td>
+      <td>${ev || `<span class="muted">none</span>`}</td>
+      <td class="muted">${esc(f.unsupportedClaims.map(human).join(", ") || "—")}</td>
+      <td class="num">${f.outcome.jobs ? `${f.outcome.completed}/${f.outcome.jobs} · ${f.outcome.rehired} rehired` : "—"}</td>`;
+    const th = $(".thumbs", tr);
+    for (const pr of f.projects) {
+      const c = gridCanvas(pr.grid, 28, pr.status === "held" ? "held" : "");
+      c.title = `${pr.title}${pr.heldReason ? "\nHELD: " + pr.heldReason : ""}`;
+      c.setAttribute("role", "img");
+      c.setAttribute("aria-label", c.title);
+      th.append(c);
+    }
+    tb.append(tr);
+  }
+}
+
+async function renderLog() {
+  const log = await api("/api/log");
+  $("#p-log").innerHTML = log.length
+    ? `<div class="section-title"><h2>Recent queries</h2><span class="muted">in-memory, last 200 — the future learning-to-rank training set</span></div>
+      <table class="plain"><thead><tr><th>time</th><th>request</th><th>spec by</th><th>mode</th><th>top results</th></tr></thead><tbody>
+      ${log.map((q) => `<tr><td class="muted">${esc(new Date(q.ts).toLocaleTimeString())}</td><td>${esc(q.text || "—")}${q.tags.length ? ` <span class="muted">[${esc(q.tags.join(", "))}]</span>` : ""}${q.image ? ` <span class="muted">+ image</span>` : ""}</td><td>${esc(q.producer)}</td><td>${esc(q.mode)}</td><td>${esc(q.top.join(" › ") || "—")}</td></tr>`).join("")}
+      </tbody></table>`
+    : `<p class="empty">No queries yet.</p>`;
+}
+
+function refreshSide() {
+  const active = document.querySelector('[role=tab][aria-selected=true]').id;
+  if (active === "t-log") renderLog().catch((e) => toast(e.message));
+}
+
+const loaders = { "t-trust": renderTrust, "t-index": renderIndex, "t-log": renderLog };
+const tabs = [...document.querySelectorAll("[role=tab]")];
+function selectTab(tab) {
+  for (const t of tabs) {
+    const on = t === tab;
+    t.setAttribute("aria-selected", String(on));
+    t.tabIndex = on ? 0 : -1;
+    document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+  }
+  history.replaceState(null, "", tab.id === "t-results" ? location.pathname : `#${tab.id.slice(2)}`);
+  loaders[tab.id]?.().catch((e) => toast(e.message));
+}
+tabs.forEach((t, i) => {
+  t.tabIndex = i === 0 ? 0 : -1;
+  t.onclick = () => selectTab(t);
+  t.onkeydown = (e) => {
+    const d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+    if (!d) return;
+    const next = tabs[(i + d + tabs.length) % tabs.length];
+    next.focus();
+    selectTab(next);
+  };
+});
+
+// ---------- boot
+(async function boot() {
+  try {
+    state.meta = await api("/api/meta");
+  } catch (err) {
+    $("#stats").textContent = `server unreachable: ${err.message}`;
+    return;
+  }
+  const s = state.meta.stats;
+  $("#stats").innerHTML = `<b>${s.freelancers}</b> freelancers · <b>${s.liveProjects}</b>/${s.projects} projects searchable · <b>${s.held}</b> held · <b>${s.flagged}</b> under review · indexed in ${s.builtMs} ms`;
+  const sel = $("#scenario");
+  for (const sc of state.meta.scenarios) sel.insertAdjacentHTML("beforeend", `<option value="${esc(sc.id)}">${esc(sc.label)}</option>`);
+  renderRefs();
+  sel.value = "hero";
+  loadScenario("hero");
+  const fromHash = tabs.find((t) => t.id === `t-${location.hash.slice(1)}`);
+  if (fromHash) selectTab(fromHash);
+  else renderTrust().catch(() => {});
+  run();
+})();
+</script>
+</body>
+</html>

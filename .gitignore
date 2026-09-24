@@ -1,0 +1,10 @@
+*.log
+.DS_Store
+.env
+assets-src/.cache/
+data/appeals.json
+data/uploads.json
+data/uploads/
+dist/
+node_modules/
+web/tsconfig.tsbuildinfo
