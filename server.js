@@ -44,7 +44,13 @@ const PUBLIC = path.join(ROOT, "web", "public");
 // The index is rebuilt (~70 ms) from corpus + Studio uploads whenever an upload is
 // published or an appeal decides one, so new work goes through the same pipeline.
 let index = buildIndex(mergeUploads(RAW_CORPUS, listUploads()));
-const rebuild = () => (index = buildIndex(mergeUploads(RAW_CORPUS, listUploads())));
+// buildIndex() returns a fresh queryLog, so a rebuild (an upload published, an appeal
+// decided) would otherwise wipe the recent-query history. Carry it across rebuilds.
+const rebuild = () => {
+  const carried = index.queryLog;
+  index = buildIndex(mergeUploads(RAW_CORPUS, listUploads()));
+  index.queryLog = carried;
+};
 
 export const CATEGORY_LABELS = { "3d_character": "3D Characters", "3d_props": "3D Props", ui_design: "UI Design", brand_design: "Brand Identity", copywriting: "Copywriting" };
 
@@ -63,11 +69,16 @@ async function readBody(req, limit = 512 * 1024) {
     chunks.push(c);
   }
   if (!chunks.length) return {};
+  let parsed;
   try {
-    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
   } catch {
     throw fail(400, "body is not valid JSON");
   }
+  // Handlers read properties off the body, so a bare null/array/number/string
+  // (all valid JSON) would crash them with a 500 instead of a 400.
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) throw fail(400, "body must be a JSON object");
+  return parsed;
 }
 
 function cleanSearch(b) {
@@ -77,7 +88,9 @@ function cleanSearch(b) {
     out.image = b.image;
   }
   if (b.spec != null) out.spec = b.spec;
-  if (b.k != null) out.k = Number(b.k);
+  // Number("abc") is NaN, and Math.max/min silently pass NaN through, so a junk
+  // k would slice the page to NaN and return zero results. Only pass finite k on.
+  if (b.k != null && Number.isFinite(Number(b.k))) out.k = Number(b.k);
   if (["casual", "competitive", "open"].includes(b.mode)) out.mode = b.mode;
   if (Number.isFinite(b.rotation)) out.rotation = b.rotation;
   return out;
@@ -277,11 +290,19 @@ const inside = (base, rel) => {
 
 async function serveStatic(res, pathname) {
   if (pathname === "/console" || pathname === "/console/") return sendFile(res, path.join(ROOT, "console", "index.html"), "no-store");
-  if (pathname.startsWith("/uploads/")) {
-    const f = inside(fileURLToPath(UPLOAD_DIR), decodeURIComponent(pathname.slice("/uploads/".length)));
+  // Percent-decoding throws URIError on a malformed escape (e.g. /%C0%AE).
+  // That is a bad request line, not a server fault: answer 400 instead of 500.
+  let decoded;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    return json(res, 400, { error: "malformed percent-encoding in path" });
+  }
+  if (decoded.startsWith("/uploads/")) {
+    const f = inside(fileURLToPath(UPLOAD_DIR), decoded.slice("/uploads/".length));
     if (f && (await exists(f))) return sendFile(res, f, "public, max-age=86400");
   }
-  const rel = decodeURIComponent(pathname).replace(/^\/+/, "");
+  const rel = decoded.replace(/^\/+/, "");
   for (const base of [DIST, PUBLIC]) {
     const f = rel && inside(base, rel);
     if (f && (await exists(f))) return sendFile(res, f, rel.startsWith("assets/") ? "public, max-age=86400" : "no-store");

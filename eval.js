@@ -225,6 +225,105 @@ const heroScore = (ix, id) => search(ix, { ...hero, k: 20 }).results.find((x) =>
   check("explain", `every explanation line traces to a logged feature (${n} lines audited)`, bad.length === 0, bad.slice(0, 3).join(" | "));
 }
 
+// ---------------------------------------------------------------- HTTP surface (server.js contract)
+// The checks above run the engine in-process; these boot the real server on a
+// spare port and pin the request-handling contract: malformed input answers 4xx
+// (never a 500, never a crash), a junk k falls back to the default page size,
+// and the recent-query log survives the index rebuilds that publishes trigger.
+{
+  const { spawn } = await import("node:child_process");
+  const { readFileSync, writeFileSync, existsSync, rmSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const ROOT = fileURLToPath(new URL(".", import.meta.url));
+
+  let srv = null;
+  let base = "";
+  for (let attempt = 0; attempt < 5 && !base; attempt++) {
+    const port = 3400 + ((process.pid + attempt * 137) % 1200);
+    const child = spawn(process.execPath, ["server.js"], { cwd: ROOT, env: { ...process.env, PORT: String(port) }, stdio: "ignore" });
+    const url = `http://127.0.0.1:${port}`;
+    for (let i = 0; i < 80 && !base; i++) {
+      try {
+        if ((await fetch(url + "/api/meta", { signal: AbortSignal.timeout(500) })).ok) { base = url; srv = child; }
+      } catch {}
+      if (!base) await new Promise((r) => setTimeout(r, 100));
+    }
+    if (!base) child.kill();
+  }
+  check("http", "server boots and answers /api/meta", !!base);
+
+  const req = async (path, opts) => {
+    try { return await fetch(base + path, opts); } catch { return null; }
+  };
+  const post = (path, body) => req(path, { method: "POST", headers: { "content-type": "application/json" }, body });
+
+  if (base) {
+    { // Number("junk") is NaN and used to slice the page to nothing
+      const r = await post("/api/search", JSON.stringify({ text: "anime character", k: "junk" }));
+      const j = r && r.status === 200 ? await r.json() : { results: [] };
+      check("http", "search: non-numeric k falls back to the default page", r && r.status === 200 && j.results.length > 0, `status ${r?.status}, ${j.results.length} results`);
+    }
+    {
+      const r = await post("/api/search", JSON.stringify({ text: "anime character", k: -5 }));
+      const j = r && r.status === 200 ? await r.json() : { results: [] };
+      check("http", "search: negative k clamps to a sane page", r && r.status === 200 && j.results.length >= 1, `${j.results.length} results`);
+    }
+    for (const body of ["null", "[1,2]", '"hello"', "12"]) { // all valid JSON, none an object
+      const r = await post("/api/search", body);
+      check("http", `search: body ${body} -> 400, not 500`, r && r.status === 400, `status ${r?.status}`);
+    }
+    {
+      const r = await post("/api/portfolio/check", JSON.stringify({ grid: "x", g64: "y" }));
+      check("http", "portfolio/check: junk grid -> 400", r && r.status === 400, `status ${r?.status}`);
+    }
+    {
+      const r = await req("/uploads/%C0%AE"); // malformed escape used to throw URIError -> 500
+      check("http", "static: malformed percent-escape -> 400, not 500", r && r.status === 400, `status ${r?.status}`);
+    }
+    {
+      const r = await req("/api/nope");
+      check("http", "api: unknown route -> 404", r && r.status === 404, `status ${r?.status}`);
+    }
+    {
+      const r = await req("/api/appeals/zzzz", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status: "??" }) });
+      check("http", "appeals: patch with junk status -> 4xx, not 500", r && r.status >= 400 && r.status < 500, `status ${r?.status}`);
+    }
+
+    // A publish rebuilds the index; the recent-query log must carry across it.
+    const uploadsFile = fileURLToPath(new URL("./data/uploads.json", import.meta.url));
+    const savedUploads = existsSync(uploadsFile) ? readFileSync(uploadsFile) : null;
+    let published = null;
+    try {
+      await post("/api/search", JSON.stringify({ text: "cozy props", k: 5 }));
+      await post("/api/search", JSON.stringify({ text: "logo", k: 5 }));
+      const logOf = async () => {
+        const r = await req("/api/log");
+        return r && r.status === 200 ? (await r.json()).length : 0;
+      };
+      const before = await logOf();
+      const g64 = Buffer.alloc(64 * 64, 128).toString("base64"); // flat gray: matches nothing
+      const preview = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+      const r = await post("/api/portfolio/publish", JSON.stringify({
+        freelancerId: "aoi",
+        title: "eval http-contract probe",
+        description: "temporary piece created and removed by npm test",
+        grid: { w: 8, h: 8, rgb: Array.from({ length: 192 }, (_, i) => (i * 67 + 13) % 256) },
+        g64,
+        preview,
+      }));
+      published = r && r.status === 200 ? (await r.json()).upload : null;
+      const after = await logOf();
+      check("http", "query log survives the index rebuild a publish triggers", r && r.status === 200 && before > 0 && after >= before, `${before} -> ${after}, publish ${r?.status}`);
+    } finally {
+      // Leave the demo data exactly as it was found.
+      if (published?.image) rmSync(fileURLToPath(new URL(`./data${published.image}`, import.meta.url)), { force: true });
+      if (savedUploads) writeFileSync(uploadsFile, savedUploads);
+      else rmSync(uploadsFile, { force: true });
+    }
+  }
+  srv?.kill();
+}
+
 // ---------------------------------------------------------------- report
 const pad = (s, n) => String(s).padEnd(n);
 console.log("\nGOLDEN SET (labels are regression guards, not ground truth)");
