@@ -12,7 +12,13 @@ const NAV = [
 export function Shell() {
   const { pathname } = useLocation();
   const onBrand = pathname === "/";
-  useEffect(() => window.scrollTo(0, 0), [pathname]);
+  useEffect(() => {
+    // Block body on purpose: an effect must not return a value. Some builds of
+    // Chromium return a thenable from window.scrollTo, and a returned Promise
+    // becomes the effect "cleanup" — which then crashes as "destroy is not a
+    // function" on the next pathname change.
+    window.scrollTo(0, 0);
+  }, [pathname]);
   return (
     <>
       <a href="#main" className={s.skip}>Skip to content</a>
