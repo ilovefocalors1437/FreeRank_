@@ -164,7 +164,8 @@ export function fingerprint(gray) {
 export function decodeGray(b64) {
   let buf;
   try {
-    buf = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    // atob wants the standard alphabet; Buffer.from also took the URL-safe one.
+    buf = Uint8Array.from(atob(b64.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
   } catch {
     buf = new Uint8Array(0);
   }

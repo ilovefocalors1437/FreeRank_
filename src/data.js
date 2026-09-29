@@ -19,8 +19,9 @@ export const RAW_CORPUS = CORPUS;
 export const GRIDS = GRIDS_JSON;
 const idSeed = (id) => [...id].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
 
-// Real pixels when the render exists; a deterministic placeholder otherwise, so the
-// engine still boots on a fresh checkout before assets are built.
+// Real pixels when the render exists; a deterministic placeholder for any project
+// without one, so a new corpus entry works before its render is built. (grids.json
+// itself is a static JSON import — the browser bundle needs one — and is tracked.)
 export function gridFor(id) {
   return GRIDS[id] || makeGrid(idSeed(id), "minimal");
 }

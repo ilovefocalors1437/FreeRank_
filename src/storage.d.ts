@@ -5,3 +5,5 @@ export interface StorageBackend {
 }
 export function useStorage(backend: StorageBackend): void;
 export function storage(): StorageBackend;
+export function dataUrl(ext: string, b64: string): string;
+export function randomHex(n: number): string;

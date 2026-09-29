@@ -29,19 +29,35 @@ export function Studio() {
     setCheck(null);
   }, [me]);
 
-  async function take(file: Blob, name: string) {
+  // Each pick supersedes the one before it. While an image loads there is nothing to
+  // check (the previous image must not be submittable under the new title), and a
+  // slow earlier load must not overwrite a later pick when it finishes last.
+  const pick = useRef(0);
+  const begin = () => {
     setError(null);
     setCheck(null);
+    setUpload(null);
+    return ++pick.current;
+  };
+  async function take(file: Blob, name: string, id = begin()) {
     try {
       const a = await analyseImage(file);
+      if (id !== pick.current) return;
       setUpload({ ...a, name });
       if (!title) setTitle(name.replace(/\.[a-z0-9]+$/i, "").replace(/[-_]/g, " "));
     } catch {
-      setError("Couldn't read that image. Try a PNG, JPEG or WebP.");
+      if (id === pick.current) setError("Couldn't read that image. Try a PNG, JPEG or WebP.");
     }
   }
   const sample = async (path: string, name: string, t: string, d: string) => {
-    await take(await fetchAsBlob(asset(path)), name);
+    const id = begin();
+    try {
+      await take(await fetchAsBlob(asset(path)), name, id);
+    } catch {
+      if (id === pick.current) setError("Couldn't load that sample image.");
+      return;
+    }
+    if (id !== pick.current) return;
     setTitle(t);
     setDescription(d);
   };

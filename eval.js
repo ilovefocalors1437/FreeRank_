@@ -324,6 +324,120 @@ const heroScore = (ix, id) => search(ix, { ...hero, k: 20 }).results.find((x) =>
   srv?.kill();
 }
 
+// ---------------------------------------------------------------- runtime-neutral engine (src/api.js)
+// The static demo runs this same API inside the browser with localStorage as the
+// store (web/src/lib/local-api.ts), and nothing above exercises that path. These
+// drive it in-process against a fake store that behaves like localStorage: values
+// are serialized on the way in and out, and a save can fail when the store is full.
+{
+  const { useStorage } = await import("./src/storage.js");
+  const { createApi } = await import("./src/api.js");
+  const { decodeGray } = await import("./src/embed.js");
+  const { readdirSync, readFileSync } = await import("node:fs");
+
+  // The browser bundle cannot import Node modules: only storage-node.js may.
+  {
+    const strip = (t) => t.replace(/^\s*\/\/.*$/gm, "");
+    const offenders = readdirSync("./src")
+      .filter((f) => f.endsWith(".js") && f !== "storage-node.js")
+      .filter((f) => /from\s+["']node:|\brequire\(|\bBuffer\b/.test(strip(readFileSync(`./src/${f}`, "utf8"))));
+    check("engine", "src/ has no Node-only imports outside storage-node.js (browser-safe)", offenders.length === 0, offenders.join(", "));
+  }
+
+  const stored = new Map();
+  let full = false;
+  useStorage({
+    load: (k) => (stored.has(k) ? JSON.parse(stored.get(k)) : null),
+    save: (k, v) => {
+      if (full) throw new Error("quota exceeded");
+      stored.set(k, JSON.stringify(v));
+    },
+    saveImage: (_id, ext, b64) => `data:image/${ext};base64,${b64}`,
+  });
+  const api = createApi();
+  const call = async (method, path, body) => {
+    try {
+      return { status: 200, body: await api.handle(method, new URL(path, "http://x"), async () => structuredClone(body ?? {})) };
+    } catch (e) {
+      return { status: e.status ?? 500, body: { error: e.message } };
+    }
+  };
+  const callRaw = async (method, path, raw) => {
+    try {
+      return { status: 200, body: await api.handle(method, new URL(path, "http://x"), async () => raw) };
+    } catch (e) {
+      return { status: e.status ?? 500, body: { error: e.message } };
+    }
+  };
+  // Fingerprints are structural, so every probe needs its own noise image (flat grays
+  // all hash alike and would count as re-uploads of each other). Noise matches nothing.
+  const noise = (seed) => {
+    let x = (seed * 2654435761) >>> 0 || 1;
+    return Uint8Array.from({ length: 64 * 64 }, () => ((x ^= x << 13), (x ^= x >>> 17), (x ^= x << 5), (x >>> 0) % 256));
+  };
+  const uploadBody = (seed, previewChars = 40) => ({
+    freelancerId: "aoi",
+    title: `engine probe ${seed}`,
+    description: "created in-process by npm test",
+    grid: { w: 8, h: 8, rgb: Array.from({ length: 192 }, (_, i) => (i * 67 + seed) % 256) },
+    g64: Buffer.from(noise(seed)).toString("base64"),
+    preview: "data:image/png;base64," + "A".repeat(previewChars),
+  });
+  const uploadsNow = async () => (await call("GET", "/api/uploads")).body;
+
+  const meta = await call("GET", "/api/meta");
+  check("engine", "api.handle serves /api/meta without a server", meta.status === 200 && meta.body.stats.freelancers === RAW_CORPUS.length, `status ${meta.status}`);
+  const nf = await call("GET", "/api/nope");
+  check("engine", "api.handle: unknown route -> 404", nf.status === 404, `status ${nf.status}`);
+  for (const raw of [null, [1, 2], "hello", 12]) {
+    const r = await callRaw("POST", "/api/search", raw);
+    check("engine", `api.handle: body ${JSON.stringify(raw)} -> 400`, r.status === 400, `status ${r.status}`);
+  }
+
+  const pub = await call("POST", "/api/portfolio/publish", uploadBody(128));
+  const up = pub.body.upload;
+  check("engine", "publish: clear piece goes live, id is up-<8 hex>, image travels as a data URL", pub.status === 200 && pub.body.verdict === "clear" && up.state === "live" && /^up-[0-9a-f]{8}$/.test(up.id) && up.image.startsWith("data:image/png;base64,"), `status ${pub.status}, verdict ${pub.body.verdict}, state ${up?.state}, id ${up?.id}, image ${String(up?.image).slice(0, 26)} ${pub.body.error ?? ""}`);
+  check("engine", "publish: persisted through the storage backend", (await uploadsNow()).length === 1 && JSON.parse(stored.get("uploads")).length === 1);
+
+  const ap = await call("POST", "/api/appeals", { reason: "other", message: "probe", freelancerId: "aoi", title: "engine probe", uploadId: up.id });
+  check("engine", "appeal: id is <8 hex>, code is FR-<6 hex upper>", ap.status === 200 && /^[0-9a-f]{8}$/.test(ap.body.id) && /^FR-[0-9A-F]{6}$/.test(ap.body.verificationCode), `status ${ap.status} ${ap.body.error ?? ""}`);
+  const dec = await call("PATCH", `/api/appeals/${ap.body.id}`, { status: "approved", note: "ok" });
+  check("engine", "appeal decision reaches the upload (live -> cleared) and is persisted", dec.status === 200 && (await uploadsNow())[0].state === "cleared" && JSON.parse(stored.get("uploads"))[0].state === "cleared" && JSON.parse(stored.get("appeals"))[0].status === "approved");
+
+  // The store is full: the change must fail loudly and leave nothing half-saved.
+  full = true;
+  const failed = await call("POST", "/api/portfolio/publish", uploadBody(90));
+  const failedAppeal = await call("POST", "/api/appeals", { reason: "other", message: "probe 2" });
+  full = false;
+  check("engine", "store full: publish -> 507, appeal -> 507 (not a silent success)", failed.status === 507 && failedAppeal.status === 507, `publish ${failed.status}, appeal ${failedAppeal.status}`);
+  check("engine", "store full: the unsaved piece and appeal are not left in memory", (await uploadsNow()).length === 1 && (await call("GET", "/api/appeals")).body.length === 1);
+  const retry = await call("POST", "/api/portfolio/publish", uploadBody(90));
+  check("engine", "store has room again: the same publish now succeeds", retry.status === 200 && (await uploadsNow()).length === 2, `status ${retry.status}`);
+
+  // Another tab wrote the stored data: refresh() must pick it up, not overwrite it.
+  stored.set("uploads", "[]");
+  stored.set("appeals", "[]");
+  check("engine", "before refresh() the engine still serves its own copy (2 uploads)", (await uploadsNow()).length === 2);
+  api.refresh();
+  check("engine", "refresh() re-reads stored uploads/appeals after another tab wrote them", (await uploadsNow()).length === 0 && (await call("GET", "/api/appeals")).body.length === 0);
+
+  // Preview size limit: 1.5 MB of decoded bytes, padding counted.
+  const LIMIT_CHARS = (1.5 * 1024 * 1024 * 4) / 3; // base64 chars for exactly 1.5 MB
+  const atLimit = await call("POST", "/api/portfolio/publish", uploadBody(61, LIMIT_CHARS));
+  const over = await call("POST", "/api/portfolio/publish", uploadBody(62, LIMIT_CHARS + 4));
+  const paddedOver = await call("POST", "/api/portfolio/publish", { ...uploadBody(63), preview: "data:image/png;base64," + "A".repeat(LIMIT_CHARS + 2) + "==" });
+  check("engine", "preview exactly 1.5 MB is accepted; 3 bytes over (plain or padded) -> 413", atLimit.status === 200 && over.status === 413 && paddedOver.status === 413, `at ${atLimit.status}, over ${over.status}, padded ${paddedOver.status}`);
+
+  // decodeGray without Buffer: standard and URL-safe base64 decode the same; junk is rejected.
+  const raw = Buffer.from(Uint8Array.from({ length: 4096 }, (_, i) => (i * 37 + (i >> 3)) % 256));
+  const std = raw.toString("base64");
+  const urlSafe = std.replace(/\+/g, "-").replace(/\//g, "_");
+  const sameBytes = Buffer.compare(Buffer.from(decodeGray(std)), raw) === 0 && Buffer.compare(Buffer.from(decodeGray(urlSafe)), raw) === 0;
+  let junkRejected = false;
+  try { decodeGray("!!!"); } catch { junkRejected = true; }
+  check("engine", `decodeGray: standard and URL-safe base64 agree (${/[+/]/.test(std) ? "alphabet exercised" : "alphabet NOT exercised"}); junk throws`, sameBytes && junkRejected && /[+/]/.test(std));
+}
+
 // ---------------------------------------------------------------- report
 const pad = (s, n) => String(s).padEnd(n);
 console.log("\nGOLDEN SET (labels are regression guards, not ground truth)");

@@ -12,27 +12,18 @@
 //                   freelancer's (e.g. sold on several marketplaces)
 //         rejected  appeal rejected; stays hidden
 
-import { storage } from "./storage.js";
+import { storage, collection, randomHex } from "./storage.js";
 
-// Loaded on first use, so the host can pick a storage backend before that.
-let uploads = null;
-const all = () => {
-  if (!uploads) {
-    const stored = storage().load("uploads");
-    uploads = Array.isArray(stored) ? stored : [];
-  }
-  return uploads;
-};
-const save = () => storage().save("uploads", uploads);
+const uploads = collection("uploads");
 
-export const listUploads = () => all();
+export const listUploads = () => uploads.all();
 
 export function addUpload({ freelancerId, title, description, grid, g64, preview, grade, state }) {
   const m = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(String(preview || ""));
   if (!m) throw Object.assign(new Error("preview must be a JPEG, PNG or WebP data URL"), { status: 400 });
   const bytes = Math.floor((m[2].length * 3) / 4) - (m[2].match(/=*$/)[0].length);
   if (bytes > 1.5 * 1024 * 1024) throw Object.assign(new Error("preview over 1.5 MB"), { status: 413 });
-  const id = `up-${crypto.randomUUID().slice(0, 8)}`;
+  const id = `up-${randomHex(8)}`;
   const ext = m[1] === "jpeg" ? "jpg" : m[1];
   const image = storage().saveImage(id, ext, m[2]);
   const u = {
@@ -47,22 +38,22 @@ export function addUpload({ freelancerId, title, description, grid, g64, preview
     state,
     createdAt: new Date().toISOString(),
   };
-  all().push(u);
-  save();
+  uploads.all().push(u);
+  uploads.commit();
   return u;
 }
 
 export function setUploadState(id, state) {
-  const u = all().find((x) => x.id === id);
+  const u = uploads.all().find((x) => x.id === id);
   if (!u) return null;
   u.state = state;
-  save();
+  uploads.commit();
   return u;
 }
 
 // Uploads become ordinary projects on a copy of the corpus. They are the newest
 // thing on the platform, so any match with existing work makes them the later copy.
-export function mergeUploads(raw, list = all()) {
+export function mergeUploads(raw, list = uploads.all()) {
   if (!list.length) return raw;
   const out = structuredClone(raw);
   const byId = new Map(out.map((f) => [f.id, f]));

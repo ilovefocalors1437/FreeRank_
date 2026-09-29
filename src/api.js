@@ -17,6 +17,7 @@ import { TIERS, DIVISIONS, ENTRY, MASTER_SEATS, divisionFloor } from "./rank.js"
 import { checkUpload, reverseSearchStatus } from "./portfolio.js";
 import { REASONS, createAppeal, listAppeals, updateAppeal } from "./appeals.js";
 import { graderStatus } from "./grader.js";
+import { resetCollections } from "./storage.js";
 
 // The index is rebuilt (~70 ms) from corpus + Studio uploads whenever an upload is
 // published or an appeal decides one, so new work goes through the same pipeline.
@@ -236,6 +237,12 @@ export const serialize = (body) => JSON.stringify(body, (_, v) => (typeof v === 
 export function createApi() {
   rebuild();
   return {
+    // The stored uploads/appeals changed under us (another browser tab wrote them):
+    // drop the in-memory copies and rebuild the index from what is stored now.
+    refresh() {
+      resetCollections();
+      rebuild();
+    },
     async handle(method, url, readBody) {
       for (const [m, re, handler, limit] of routes) {
         const hit = url.pathname.match(re);

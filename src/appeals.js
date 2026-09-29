@@ -9,7 +9,7 @@
 // Persisted through src/storage.js (data/appeals.json on the server, localStorage
 // in the static demo) so a demo survives restarts.
 
-import { storage } from "./storage.js";
+import { collection, randomHex } from "./storage.js";
 
 export const REASONS = {
   original_author: { label: "I made this — the other upload copied me", needs: "a source file, WIP screenshots or a timelapse link" },
@@ -19,16 +19,7 @@ export const REASONS = {
 };
 const STATUSES = ["submitted", "in_review", "approved", "rejected"];
 
-// Loaded on first use, so the host can pick a storage backend before that.
-let appeals = null;
-const all = () => {
-  if (!appeals) {
-    const stored = storage().load("appeals");
-    appeals = Array.isArray(stored) ? stored : [];
-  }
-  return appeals;
-};
-const save = () => storage().save("appeals", appeals);
+const appeals = collection("appeals");
 
 const bad = (msg) => Object.assign(new Error(msg), { status: 400 });
 
@@ -41,7 +32,7 @@ export function createAppeal(index, b) {
   if (reason !== "other" && !links.length && message.length < 20) throw bad(`this reason needs ${REASONS[reason].needs}`);
   const match = b.matchProject ? index.projectById.get(String(b.matchProject)) : null;
   const appeal = {
-    id: crypto.randomUUID().slice(0, 8),
+    id: randomHex(8),
     createdAt: new Date().toISOString(),
     status: "submitted",
     freelancerId: b.freelancerId ? String(b.freelancerId).slice(0, 40) : null,
@@ -51,22 +42,22 @@ export function createAppeal(index, b) {
     reason,
     message,
     links,
-    verificationCode: `FR-${crypto.randomUUID().slice(0, 6).toUpperCase()}`,
+    verificationCode: `FR-${randomHex(6).toUpperCase()}`,
     history: [{ at: new Date().toISOString(), status: "submitted" }],
   };
-  all().unshift(appeal);
-  save();
+  appeals.all().unshift(appeal);
+  appeals.commit();
   return appeal;
 }
 
-export const listAppeals = () => all();
+export const listAppeals = () => appeals.all();
 
 export function updateAppeal(id, b) {
-  const a = all().find((x) => x.id === id);
+  const a = appeals.all().find((x) => x.id === id);
   if (!a) throw Object.assign(new Error("no such appeal"), { status: 404 });
   if (!STATUSES.includes(b.status)) throw bad(`status must be one of ${STATUSES.join(", ")}`);
   a.status = b.status;
   a.history.push({ at: new Date().toISOString(), status: b.status, note: String(b.note || "").slice(0, 500) });
-  save();
+  appeals.commit();
   return a;
 }

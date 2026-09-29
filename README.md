@@ -15,7 +15,7 @@ portfolio** — and where stolen portfolios never reach the ladder.
 npm install --prefix web     # once
 npm run build                # builds the web app into web/dist
 npm start                    # API + web on http://localhost:3399
-npm test                     # 51 checks: search quality, attacks, arenas, rank maths, HTTP contract
+npm test                     # 69 checks: search quality, attacks, arenas, rank maths, HTTP contract, browser-safe engine
 ```
 
 For frontend work, run `npm start` and `npm run dev` together (Vite on :5178 proxies
@@ -26,8 +26,9 @@ For frontend work, run `npm start` and `npm run dev` together (Vite on :5178 pro
 Every push to `main` runs `.github/workflows/static.yml`: `npm test`, then
 `npm run build:static`, then deploy to Pages. Pages can't run `server.js`, so in that
 build the same API (`src/api.js`) runs inside the page. Uploads and appeals are saved
-in the visitor's localStorage, and the LLM grader is off, since no key goes to a
-browser. The engine console is not included. One-time setup: *Settings → Pages →
+in the visitor's localStorage (kept in sync across tabs; if the browser's storage is
+full the Studio says so and changes nothing), and the LLM grader is off, since no key
+goes to a browser. The engine console is not included. One-time setup: *Settings → Pages →
 Source: GitHub Actions*.
 
 ```bash
