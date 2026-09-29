@@ -75,11 +75,19 @@ const inside = (base, rel) => {
 
 async function serveStatic(res, pathname) {
   if (pathname === "/console" || pathname === "/console/") return sendFile(res, path.join(ROOT, "console", "index.html"), "no-store");
-  if (pathname.startsWith("/uploads/")) {
-    const f = inside(fileURLToPath(UPLOAD_DIR), decodeURIComponent(pathname.slice("/uploads/".length)));
+  // Percent-decoding throws URIError on a malformed escape (e.g. /%C0%AE).
+  // That is a bad request line, not a server fault: answer 400 instead of 500.
+  let decoded;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    return json(res, 400, { error: "malformed percent-encoding in path" });
+  }
+  if (decoded.startsWith("/uploads/")) {
+    const f = inside(fileURLToPath(UPLOAD_DIR), decoded.slice("/uploads/".length));
     if (f && (await exists(f))) return sendFile(res, f, "public, max-age=86400");
   }
-  const rel = decodeURIComponent(pathname).replace(/^\/+/, "");
+  const rel = decoded.replace(/^\/+/, "");
   for (const base of [DIST, PUBLIC]) {
     const f = rel && inside(base, rel);
     if (f && (await exists(f))) return sendFile(res, f, rel.startsWith("assets/") ? "public, max-age=86400" : "no-store");

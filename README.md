@@ -15,7 +15,7 @@ portfolio** — and where stolen portfolios never reach the ladder.
 npm install --prefix web     # once
 npm run build                # builds the web app into web/dist
 npm start                    # API + web on http://localhost:3399
-npm test                     # 39 checks: search quality, attacks, arenas, rank maths
+npm test                     # 51 checks: search quality, attacks, arenas, rank maths, HTTP contract
 ```
 
 For frontend work, run `npm start` and `npm run dev` together (Vite on :5178 proxies

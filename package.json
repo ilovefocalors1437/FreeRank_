@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "test": "node eval.js",
+    "test:e2e": "node e2e-verify.mjs",
     "build": "npm --prefix web run build",
     "build:static": "npm --prefix web run build:static",
     "dev": "npm --prefix web run dev",

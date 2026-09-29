@@ -21,7 +21,13 @@ import { graderStatus } from "./grader.js";
 // The index is rebuilt (~70 ms) from corpus + Studio uploads whenever an upload is
 // published or an appeal decides one, so new work goes through the same pipeline.
 let index;
-const rebuild = () => (index = buildIndex(mergeUploads(RAW_CORPUS, listUploads())));
+// buildIndex() returns a fresh queryLog, so a rebuild (an upload published, an appeal
+// decided) would otherwise wipe the recent-query history. Carry it across rebuilds.
+const rebuild = () => {
+  const carried = index?.queryLog;
+  index = buildIndex(mergeUploads(RAW_CORPUS, listUploads()));
+  if (carried) index.queryLog = carried;
+};
 
 export const CATEGORY_LABELS = { "3d_character": "3D Characters", "3d_props": "3D Props", ui_design: "UI Design", brand_design: "Brand Identity", copywriting: "Copywriting" };
 
@@ -34,7 +40,9 @@ function cleanSearch(b) {
     out.image = b.image;
   }
   if (b.spec != null) out.spec = b.spec;
-  if (b.k != null) out.k = Number(b.k);
+  // Number("abc") is NaN, and Math.max/min silently pass NaN through, so a junk
+  // k would slice the page to NaN and return zero results. Only pass finite k on.
+  if (b.k != null && Number.isFinite(Number(b.k))) out.k = Number(b.k);
   if (["casual", "competitive", "open"].includes(b.mode)) out.mode = b.mode;
   if (Number.isFinite(b.rotation)) out.rotation = b.rotation;
   return out;
@@ -231,7 +239,15 @@ export function createApi() {
     async handle(method, url, readBody) {
       for (const [m, re, handler, limit] of routes) {
         const hit = url.pathname.match(re);
-        if (hit && method === m) return handler(limit ? await readBody(limit) : undefined, hit, url);
+        if (!hit || method !== m) continue;
+        let body;
+        if (limit) {
+          body = await readBody(limit);
+          // Handlers read properties off the body, so a bare null/array/number/string
+          // (all valid JSON) would crash them with a 500 instead of a 400.
+          if (body === null || typeof body !== "object" || Array.isArray(body)) throw fail(400, "body must be a JSON object");
+        }
+        return handler(body, hit, url);
       }
       throw fail(404, `no route ${method} ${url.pathname}`);
     },
